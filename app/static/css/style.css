@@ -98,6 +98,7 @@ button {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
   margin-bottom: 28px;
 }
 
@@ -106,14 +107,26 @@ button {
   color: var(--slate-soft);
 }
 
-.table-picker input {
-  width: 70px;
+.table-picker input,
+.table-picker select {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: white;
   font-size: 15px;
   font-family: var(--sans);
+}
+
+.table-picker input#table-input {
+  width: 70px;
+}
+
+.table-picker input#name-input {
+  width: 180px;
+}
+
+.table-picker input#phone-input {
+  width: 150px;
 }
 
 /* ---------- Menu grid ---------- */
@@ -360,6 +373,12 @@ button {
   margin-top: 10px;
 }
 
+.rating-filed {
+  font-size: 13px;
+  color: var(--green);
+  margin-top: 10px;
+}
+
 /* ---------- Waiter dashboard ---------- */
 .order-list {
   display: flex;
@@ -380,6 +399,45 @@ button {
   border-radius: var(--radius);
   font-family: var(--sans);
   font-size: 13px;
+  background: white;
+}
+
+.prep-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.prep-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--ivory-dim);
+  border-radius: var(--radius);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.prep-row.prep-done {
+  background: #DCE6DA;
+  color: var(--green);
+  font-weight: 500;
+}
+
+.prep-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.prep-controls select {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 12px;
   background: white;
 }
 
