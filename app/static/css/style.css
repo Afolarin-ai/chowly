@@ -1,0 +1,435 @@
+/* ---------- Tokens ---------- */
+:root {
+  --ivory: #F6F0E4;
+  --ivory-dim: #EDE4D3;
+  --slate: #211D19;
+  --slate-soft: #4A423A;
+  --marigold: #E0952B;
+  --marigold-deep: #B9741A;
+  --tomato: #B33A3A;
+  --green: #4E6B4B;
+  --line: rgba(33, 29, 25, 0.14);
+  --radius: 3px;
+  --serif: "Fraunces", Georgia, serif;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--ivory);
+  color: var(--slate);
+  font-family: var(--sans);
+  min-height: 100vh;
+}
+
+button {
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+/* ---------- Topbar ---------- */
+.topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 28px 40px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brand-mark {
+  font-family: var(--serif);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brand-sub {
+  margin-left: 12px;
+  font-size: 14px;
+  color: var(--slate-soft);
+}
+
+.role-switch {
+  display: flex;
+  border: 1px solid var(--slate);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.role-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--slate);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.role-btn.is-active {
+  background: var(--slate);
+  color: var(--ivory);
+}
+
+/* ---------- Layout ---------- */
+#app {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 36px 40px 80px;
+}
+
+.section-title {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.section-hint {
+  font-size: 14px;
+  color: var(--slate-soft);
+  margin: 0 0 24px;
+}
+
+.table-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.table-picker label {
+  font-size: 14px;
+  color: var(--slate-soft);
+}
+
+.table-picker input {
+  width: 70px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: white;
+  font-size: 15px;
+  font-family: var(--sans);
+}
+
+/* ---------- Menu grid ---------- */
+.menu-category {
+  margin-bottom: 32px;
+}
+
+.menu-category h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 17px;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.menu-item {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menu-item-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.menu-item-meta {
+  font-size: 13px;
+  color: var(--slate-soft);
+}
+
+.menu-item-footer {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.menu-item-price {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.qty-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.qty-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--slate);
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qty-btn:hover { background: var(--slate); color: var(--ivory); }
+
+.qty-value {
+  min-width: 16px;
+  text-align: center;
+  font-size: 14px;
+}
+
+/* ---------- Cart drawer ---------- */
+.cart-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--slate);
+  color: var(--ivory);
+  padding: 16px 40px;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cart-bar.is-visible { display: flex; }
+
+.cart-summary {
+  font-size: 15px;
+}
+
+.cart-summary strong { font-family: var(--serif); font-size: 17px; }
+
+.btn-primary {
+  background: var(--marigold);
+  color: var(--slate);
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.btn-primary:hover { background: var(--marigold-deep); color: var(--ivory); }
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--slate);
+  color: var(--slate);
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.btn-secondary:hover { background: var(--slate); color: var(--ivory); }
+
+/* ---------- Order ticket ---------- */
+.ticket {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+  position: relative;
+}
+
+.ticket-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px dashed var(--line);
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+}
+
+.ticket-title {
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 500;
+}
+
+.ticket-status {
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.status-placed { background: #EFE0C4; color: #7A5A16; }
+.status-assigned { background: #DCE6DA; color: var(--green); }
+.status-served { background: #DDE8EF; color: #33586E; }
+.status-paid { background: #E3ECE0; color: var(--green); }
+
+.ticket-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 6px 0;
+}
+
+.ticket-row .qty { color: var(--slate-soft); margin-right: 8px; }
+
+.ticket-total {
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px dashed var(--line);
+  margin-top: 10px;
+  padding-top: 10px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.ticket-meta {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--slate-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.ticket-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Complaint form ---------- */
+.complaint-box {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+}
+
+.complaint-box label {
+  display: block;
+  font-size: 13px;
+  color: var(--slate-soft);
+  margin-bottom: 6px;
+}
+
+.complaint-box textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-family: var(--sans);
+  font-size: 14px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.rating-picker {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+
+.rating-star {
+  font-size: 22px;
+  color: var(--line);
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.rating-star.is-active { color: var(--tomato); }
+
+.complaint-filed {
+  font-size: 13px;
+  color: var(--tomato);
+  margin-top: 10px;
+}
+
+/* ---------- Waiter dashboard ---------- */
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.assign-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.assign-row select {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 13px;
+  background: white;
+}
+
+.empty-state {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--slate-soft);
+}
+
+.empty-state p {
+  font-family: var(--serif);
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  background: var(--slate);
+  color: var(--ivory);
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 640px) {
+  .topbar { padding: 20px; flex-direction: column; align-items: flex-start; gap: 14px; }
+  #app { padding: 24px 20px 100px; }
+  .cart-bar { padding: 14px 20px; flex-direction: column; gap: 10px; align-items: flex-start; }
+}
+
+/* ---------- Accessibility ---------- */
+:focus-visible {
+  outline: 2px solid var(--marigold-deep);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
