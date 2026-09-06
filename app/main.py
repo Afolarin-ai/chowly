@@ -86,11 +86,14 @@ def create_order(payload: schemas.OrderCreate, db: Session = Depends(get_db)):
 
     restaurant = get_restaurant(db)
 
-    # Get-or-create the customer by phone number — no login, but a real
-    # Customer record, matching phone as the natural identifier.
-    customer = db.query(models.Customer).filter(
-        models.Customer.phone_number == payload.customer.phone_number
-    ).first()
+    # Get-or-create the customer. Phone is optional — when given, it's used
+    # to recognize a returning customer; when not, a fresh Customer row is
+    # created per order (still a real record, just without a dedupe key).
+    customer = None
+    if payload.customer.phone_number:
+        customer = db.query(models.Customer).filter(
+            models.Customer.phone_number == payload.customer.phone_number
+        ).first()
     if not customer:
         customer = models.Customer(**payload.customer.model_dump())
         db.add(customer)

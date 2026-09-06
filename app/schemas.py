@@ -51,7 +51,7 @@ class BartenderOut(BaseModel):
 class CustomerIn(BaseModel):
     first_name: str
     last_name: str
-    phone_number: str
+    phone_number: Optional[str] = None
     email: Optional[str] = None
 
 
@@ -59,7 +59,7 @@ class CustomerOut(BaseModel):
     id: int
     first_name: str
     last_name: str
-    phone_number: str
+    phone_number: Optional[str] = None
 
     class Config:
         from_attributes = True
