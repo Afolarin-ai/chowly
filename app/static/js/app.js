@@ -8,7 +8,6 @@ const state = {
   cart: {},           // menu_item_id -> quantity
   tableNumber: localStorage.getItem("chowly_table") || "",
   customerName: localStorage.getItem("chowly_customer_name") || "",
-  customerPhone: localStorage.getItem("chowly_customer_phone") || "",
   myOrderIds: JSON.parse(localStorage.getItem("chowly_my_orders") || "[]"),
   myOrders: [],
   waiterOrders: [],
@@ -62,6 +61,14 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// "assigned" covers two real moments: a waiter has picked the order up,
+// and — once at least one item has an actual chef/bartender recorded —
+// the kitchen is actually working on it.
+function assignedStageLabel(order) {
+  const anyPrepped = order.preparations.some((p) => p.status === "completed");
+  return anyPrepped ? "Order is being prepared" : "Assigned to a waiter";
+}
+
 // ---------------------------------------------------------------------
 // Generated avatars — deterministic color + initials, no fake stock photos
 // ---------------------------------------------------------------------
@@ -83,41 +90,30 @@ function avatarHtml(first, last, size = "md") {
 }
 
 // ---------------------------------------------------------------------
-// Illustrated food/drink icons — hand-drawn SVGs, not stock photography
+// Real dish photography, matched by exact menu item name
 // ---------------------------------------------------------------------
-const FOOD_ICONS = {
-  rice: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12c0 4.5 3.6 7 8 7s8-2.5 8-7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><ellipse cx="12" cy="12" rx="8" ry="3.2" stroke="#fff" stroke-width="1.6"/><circle cx="9.4" cy="11.3" r=".9" fill="#fff"/><circle cx="12.3" cy="10.3" r=".9" fill="#fff"/><circle cx="14.8" cy="11.5" r=".9" fill="#fff"/></svg>`,
-  grill: `<svg viewBox="0 0 24 24" fill="none"><path d="M2.5 12h19" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><rect x="5.2" y="8.7" width="3.6" height="6.6" rx="1.5" stroke="#fff" stroke-width="1.5"/><rect x="10.2" y="8.7" width="3.6" height="6.6" rx="1.5" stroke="#fff" stroke-width="1.5"/><rect x="15.2" y="8.7" width="3.6" height="6.6" rx="1.5" stroke="#fff" stroke-width="1.5"/></svg>`,
-  soup: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12c0 4.5 3.6 7 8 7s8-2.5 8-7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><ellipse cx="12" cy="12" rx="8" ry="3.2" stroke="#fff" stroke-width="1.6"/><path d="M9 6.6c0-1.6 1-2.4 1-2.4M15 6.6c0-1.8-1.1-2.6-1.1-2.6" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
-  shell: `<svg viewBox="0 0 24 24" fill="none"><path d="M20 13a8 8 0 10-8 8 6 6 0 006-6 4.3 4.3 0 00-4.3-4.3A2.8 2.8 0 0011 13.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
-  cocktail: `<svg viewBox="0 0 24 24" fill="none"><path d="M5 5h14l-6.3 7.2v6.3M9.7 18.5h4.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 8.5h6" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
-  hibiscus: `<svg viewBox="0 0 24 24" fill="none"><path d="M7 6.5h10l-1 12a2 2 0 01-2 1.8h-4a2 2 0 01-2-1.8L7 6.5z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 6.5c-1-1.3-1-2.6 0-3.5m10 3.5c1-1.3 1-2.6 0-3.5" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>`,
-  wine: `<svg viewBox="0 0 24 24" fill="none"><path d="M8 4c-.9 3.2.1 6.8 4 6.8S16.9 7.2 16 4H8z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.8V18M9.3 18h5.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
-  beer: `<svg viewBox="0 0 24 24" fill="none"><path d="M6 8h9v10a2 2 0 01-2 2H8a2 2 0 01-2-2V8z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M15 9.5h1.5A2 2 0 0119 11v3a2 2 0 01-2 2H15" stroke="#fff" stroke-width="1.6"/><path d="M8 8c-.5-1.5.5-2 .3-3.5M11 8c-.5-1.8.6-2.3.3-4" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
-  juice: `<svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l-1 15a2 2 0 01-2 1.8h-2A2 2 0 019 19L8 4z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.3 9h7.4M8.7 13.5h6.6" stroke="#fff" stroke-width="1.3"/></svg>`,
-  default_food: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#fff" stroke-width="1.6"/><path d="M9 9l6 6M15 9l-6 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
-  default_drink: `<svg viewBox="0 0 24 24" fill="none"><path d="M7 5h10l-1.2 13a2 2 0 01-2 1.8h-3.6a2 2 0 01-2-1.8L7 5z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+const MENU_PHOTOS = {
+  "Jollof Rice & Grilled Chicken": "jollof_rice_and_grilled_chicken.jpg",
+  "Suya Platter": "suya_platter.jpg",
+  "Pounded Yam & Egusi Soup": "pounded_yam_and_egusi_soup.jpg",
+  "Peppered Snails": "peppered_snail.jpg",
+  "Plantain & Fish Pepper Soup": "plantain_and_fish_pepper_stew.jpg",
+  "Chapman": "chapman.jpg",
+  "Zobo": "zobo.jpg",
+  "Palm Wine": "palm_wine.jpg",
+  "Chilled Star Lager": "star_lager.jpg",
+  "Fresh Pineapple Juice": "pineapple_juice.jpg",
 };
 
-function foodIconFor(item) {
-  const n = item.item_name.toLowerCase();
-  let key;
-  if (n.includes("rice")) key = "rice";
-  else if (n.includes("suya") || n.includes("grill") || n.includes("chicken")) key = "grill";
-  else if (n.includes("soup") || n.includes("yam")) key = "soup";
-  else if (n.includes("snail")) key = "shell";
-  else if (n.includes("chapman") || n.includes("cocktail")) key = "cocktail";
-  else if (n.includes("zobo") || n.includes("hibiscus")) key = "hibiscus";
-  else if (n.includes("wine")) key = "wine";
-  else if (n.includes("lager") || n.includes("beer") || n.includes("star")) key = "beer";
-  else if (n.includes("juice") || n.includes("pineapple")) key = "juice";
-  else key = item.item_type === "food" ? "default_food" : "default_drink";
-  return FOOD_ICONS[key];
+function menuPhotoUrl(item) {
+  const file = MENU_PHOTOS[item.item_name];
+  return file ? `/static/images/food/${file}` : null;
 }
 
-function foodTileHtml(item) {
-  const cls = item.item_type === "food" ? "is-food" : "is-drink";
-  return `<div class="food-tile ${cls}">${foodIconFor(item)}</div>`;
+function menuItemPhotoHtml(item) {
+  const url = menuPhotoUrl(item);
+  if (!url) return "";
+  return `<img class="menu-item-photo" src="${url}" alt="${escapeAttr(item.item_name)}" loading="lazy">`;
 }
 
 // ---------------------------------------------------------------------
@@ -134,6 +130,8 @@ document.querySelectorAll(".role-btn").forEach((btn) => {
     btn.classList.add("is-active");
     btn.setAttribute("aria-selected", "true");
     roleSwitchEl.classList.toggle("is-waiter", btn.dataset.role === "waiter");
+    document.querySelector(".scene-photo-customer").classList.toggle("is-active", btn.dataset.role === "customer");
+    document.querySelector(".scene-photo-waiter").classList.toggle("is-active", btn.dataset.role === "waiter");
     state.role = btn.dataset.role;
     render(true);
   });
@@ -181,8 +179,6 @@ function renderCustomer(animateEntrance) {
     <div class="table-picker">
       <label for="name-input">Your name</label>
       <input id="name-input" type="text" value="${escapeAttr(state.customerName)}" placeholder="e.g. Daniel Adeyemi">
-      <label for="phone-input">Phone</label>
-      <input id="phone-input" type="tel" value="${escapeAttr(state.customerPhone)}" placeholder="e.g. 08012345678">
       <label for="table-input">Table</label>
       <input id="table-input" type="number" min="1" value="${state.tableNumber}" placeholder="e.g. 5">
     </div>
@@ -193,10 +189,6 @@ function renderCustomer(animateEntrance) {
   document.getElementById("name-input").addEventListener("input", (e) => {
     state.customerName = e.target.value;
     localStorage.setItem("chowly_customer_name", state.customerName);
-  });
-  document.getElementById("phone-input").addEventListener("input", (e) => {
-    state.customerPhone = e.target.value;
-    localStorage.setItem("chowly_customer_phone", state.customerPhone);
   });
   document.getElementById("table-input").addEventListener("input", (e) => {
     state.tableNumber = e.target.value;
@@ -229,19 +221,17 @@ function menuItemHtml(item, staggerIndex) {
   const styleAttr = staggerIndex !== null ? ` style="--i:${staggerIndex}"` : "";
   return `
     <div class="menu-item"${styleAttr}>
-      <div class="menu-item-top">
-        ${foodTileHtml(item)}
-        <div>
-          <div class="menu-item-name">${item.item_name}</div>
-          <div class="menu-item-meta">${item.prep_time_minutes} min</div>
-        </div>
-      </div>
-      <div class="menu-item-footer">
-        <div class="menu-item-price">${money(item.price)}</div>
-        <div class="qty-control">
-          <button class="qty-btn" data-qty-action="-1" data-id="${item.id}" aria-label="Remove one ${item.item_name}">&minus;</button>
-          <span class="qty-value">${qty}</span>
-          <button class="qty-btn" data-qty-action="1" data-id="${item.id}" aria-label="Add one ${item.item_name}">&plus;</button>
+      ${menuItemPhotoHtml(item)}
+      <div class="menu-item-body">
+        <div class="menu-item-name">${item.item_name}</div>
+        <div class="menu-item-meta">${item.prep_time_minutes} min</div>
+        <div class="menu-item-footer">
+          <div class="menu-item-price">${money(item.price)}</div>
+          <div class="qty-control">
+            <button class="qty-btn" data-qty-action="-1" data-id="${item.id}" aria-label="Remove one ${item.item_name}">&minus;</button>
+            <span class="qty-value">${qty}</span>
+            <button class="qty-btn" data-qty-action="1" data-id="${item.id}" aria-label="Add one ${item.item_name}">&plus;</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -280,8 +270,8 @@ async function placeOrder() {
     showToast("Enter your table number first");
     return;
   }
-  if (!state.customerName.trim() || !state.customerPhone.trim()) {
-    showToast("Enter your name and phone number first");
+  if (!state.customerName.trim()) {
+    showToast("Enter your name first");
     return;
   }
   const items = Object.entries(state.cart).map(([menu_item_id, quantity]) => ({
@@ -293,7 +283,7 @@ async function placeOrder() {
       method: "POST",
       body: JSON.stringify({
         table_number: Number(state.tableNumber),
-        customer: { ...splitName(state.customerName), phone_number: state.customerPhone.trim() },
+        customer: { ...splitName(state.customerName), phone_number: null },
         items,
       }),
     });
@@ -311,7 +301,7 @@ async function placeOrder() {
 function orderTicketHtml(order) {
   const statusLabel = {
     placed: "Placed \u2014 waiting on a waiter",
-    assigned: "Being prepared",
+    assigned: assignedStageLabel(order),
     served: "Served",
     paid: "Paid",
   }[order.status];
@@ -537,7 +527,7 @@ function renderWaiter() {
 function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
   const statusLabel = {
     placed: "New \u2014 needs a waiter",
-    assigned: "In progress",
+    assigned: assignedStageLabel(order),
     served: "Served \u2014 awaiting payment",
     paid: "Paid",
   }[order.status];
@@ -579,7 +569,7 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
         <div class="ticket-title">Table ${order.table_number} &middot; Order #${order.id}</div>
         <div class="ticket-status status-${order.status}${statusPop}">${statusLabel}</div>
       </div>
-      <div class="ticket-meta"><span>${order.customer.first_name} ${order.customer.last_name}</span><span>${order.customer.phone_number}</span></div>
+      <div class="ticket-meta"><span>${order.customer.first_name} ${order.customer.last_name}</span></div>
       ${rows}
       <div class="ticket-total"><span>Total</span><span>${money(order.total_amount)}</span></div>
       <div class="ticket-meta">
