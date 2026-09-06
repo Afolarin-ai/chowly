@@ -101,6 +101,21 @@ original model's separate tables — a customer can rate an order without
 complaining, or complain without rating, and each can only be filed once
 per order.
 
+### Visual design
+Menu items use hand-illustrated SVG icons (a skewer for suya, a spiral
+shell for snails, a distinct wine-glass shape from the cocktail glass,
+and so on) in a colored tile, rather than stock photography — real
+photos would mean either hotlinking third-party images with unclear
+licensing or bundling large binary assets, and neither survives a
+lightweight, freely-deployable app well. Staff are represented with
+generated initials avatars (a deterministic color per name), not fake
+stock headshots of people who don't exist. Motion is scoped
+deliberately: one staggered entrance for the menu on first load, and
+functional micro-motion elsewhere (the role toggle, the cart bar, a
+prep row popping when checked off, a ticket glowing once when paid) —
+not hover animations on every card, which reads as generic rather than
+intentional.
+
 ### Deployment
 See [Section 5](#5-how-to-deploy-it-yourself) below for the exact steps —
 I can't create accounts or click through a deploy on your behalf, so
