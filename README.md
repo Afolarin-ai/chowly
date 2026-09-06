@@ -54,7 +54,7 @@ prior engineered-model assignment, carried through unchanged: `Customer`,
 
 | Table | Key fields |
 |---|---|
-| `Customer` | first_name, last_name, phone_number (unique), email, date_registered |
+| `Customer` | first_name, last_name, phone_number (optional, unique when given), email, date_registered |
 | `Restaurant` | name, address, phone_number, email |
 | `Menu` | restaurant_id, name, menu_type, description |
 | `MenuItem` | menu_id, item_name, item_type (food/drink), price, prep_time_minutes, availability_status |
@@ -70,11 +70,15 @@ prior engineered-model assignment, carried through unchanged: `Customer`,
 per the instruction to change the model where the build requires it and
 say why:
 
-- **No `CustomerID`-based login.** The assignment explicitly states
-  "logins are not required, a simple switch is enough." `Customer` still
-  exists as a real table — a customer's name and phone are captured at
-  order time and get-or-created by phone number — but there's no
-  authentication layer sitting in front of it.
+- **No `CustomerID`-based login, and phone number is optional.** The
+  assignment explicitly states "logins are not required, a simple switch
+  is enough." `Customer` still exists as a real table — a customer's name
+  is captured at order time, with phone number as an optional field for
+  recognizing a returning customer (get-or-created by phone when given;
+  a fresh row is created per order when it isn't) — but there's no
+  authentication layer sitting in front of it. Making phone optional was
+  a deliberate UX call once the app was actually being used: requiring it
+  added friction for no real benefit in a no-login flow.
 - **A single seeded `Restaurant` and `Menu`.** The original model supports
   many restaurants, each with their own menu. This build is a single
   restaurant's ordering system (Chowly deployed *for* one restaurant, not
@@ -102,19 +106,19 @@ complaining, or complain without rating, and each can only be filed once
 per order.
 
 ### Visual design
-Menu items use hand-illustrated SVG icons (a skewer for suya, a spiral
-shell for snails, a distinct wine-glass shape from the cocktail glass,
-and so on) in a colored tile, rather than stock photography — real
-photos would mean either hotlinking third-party images with unclear
-licensing or bundling large binary assets, and neither survives a
-lightweight, freely-deployable app well. Staff are represented with
-generated initials avatars (a deterministic color per name), not fake
-stock headshots of people who don't exist. Motion is scoped
-deliberately: one staggered entrance for the menu on first load, and
-functional micro-motion elsewhere (the role toggle, the cart bar, a
-prep row popping when checked off, a ticket glowing once when paid) —
-not hover animations on every card, which reads as generic rather than
-intentional.
+Menu items show real dish photography (resized and compressed from the
+original uploads down to a few KB each) instead of stock icons, laid out
+like a typical food-ordering app: photo on top, name/price/controls
+below. Two venue photos (kitchen, dining room) sit behind everything as
+a very heavily washed-out background that swaps with the Customer/Waiter
+toggle — enough for ambient depth, not enough to compete with foreground
+text. Staff are represented with generated initials avatars (a
+deterministic color per name), not fake stock headshots of people who
+don't exist. Motion is scoped deliberately: one staggered entrance for
+the menu on first load, and functional micro-motion elsewhere (the role
+toggle, the cart bar, a prep row popping when checked off, a ticket
+glowing once when paid) — not hover animations on every card, which
+reads as generic rather than intentional.
 
 ### Deployment
 See [Section 5](#5-how-to-deploy-it-yourself) below for the exact steps —
@@ -182,14 +186,16 @@ listing its name, price, and prep time — loaded from the database at
 startup via `Restaurant` → `Menu` → `MenuItem`, not hardcoded in the
 frontend.
 
-**Order placement.** The customer enters their name, phone number, and
-table number, adjusts quantities with the +/− controls on each item, and
-a cart bar appears at the bottom showing the running item count and
-total. Pressing **Place order** looks up or creates their `Customer`
-record by phone number, creates the `Order` and its `OrderItem` rows, and
-creates one `OrderPreparation` row per item (unassigned). The customer
-immediately sees an order ticket with its status, itemised total, and
-estimated waiting time.
+**Order placement.** The customer enters their name and table number
+(phone number is optional — a small field to ask for up front when
+there's no real benefit to requiring it in a no-login flow), adjusts
+quantities with the +/− controls on each item, and a cart bar appears at
+the bottom showing the running item count and total. Pressing **Place
+order** looks up or creates their `Customer` record (by phone when one
+was given, otherwise a fresh record), creates the `Order` and its
+`OrderItem` rows, and creates one `OrderPreparation` row per item
+(unassigned). The customer immediately sees an order ticket with its
+status, itemised total, and estimated waiting time.
 
 **Order assignment.** Switching to the Waiter tab shows every unpaid
 order. A waiter selects their own name once (remembered for the
@@ -224,8 +230,8 @@ re-fetches the full current order list from the server on every load.
 ## 4. How to use it (walkthrough)
 
 1. Open the live link. You land on the **Customer** view.
-2. Enter your name, phone number, and a table number (any number — there's
-   no real table registry).
+2. Enter your name and a table number (any number — there's no real
+   table registry).
 3. Use the **+ / −** buttons on any menu item to build an order. A bar
    appears at the bottom showing your item count and total.
 4. Press **Place order**. Your order appears under "Your orders" with a
