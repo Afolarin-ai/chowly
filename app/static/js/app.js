@@ -13,6 +13,8 @@ const state = {
   myOrders: [],
   waiterOrders: [],
   actingWaiterId: localStorage.getItem("chowly_waiter_id") || "",
+  justCompletedPrepIds: new Set(),   // order_item_id -> plays the "just recorded" pop once
+  justSettledOrderIds: new Set(),    // order_id -> plays the "just paid" glow once
 };
 
 const app = document.getElementById("app");
@@ -50,9 +52,79 @@ function splitName(fullName) {
   return { first_name: trimmed.slice(0, idx), last_name: trimmed.slice(idx + 1) };
 }
 
+function escapeAttr(str) {
+  return String(str).replace(/"/g, "&quot;");
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---------------------------------------------------------------------
+// Generated avatars — deterministic color + initials, no fake stock photos
+// ---------------------------------------------------------------------
+const AVATAR_PALETTE = ["#E0952B", "#4E6B4B", "#4F7A70", "#B33A3A", "#7A5A16", "#33586E"];
+
+function avatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length];
+}
+
+function initials(first, last) {
+  return `${(first || "?")[0] || ""}${(last || "")[0] || ""}`.toUpperCase();
+}
+
+function avatarHtml(first, last, size = "md") {
+  const name = `${first} ${last}`;
+  return `<span class="avatar avatar-${size}" style="background:${avatarColor(name)}">${initials(first, last)}</span>`;
+}
+
+// ---------------------------------------------------------------------
+// Illustrated food/drink icons — hand-drawn SVGs, not stock photography
+// ---------------------------------------------------------------------
+const FOOD_ICONS = {
+  rice: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12c0 4.5 3.6 7 8 7s8-2.5 8-7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><ellipse cx="12" cy="12" rx="8" ry="3.2" stroke="#fff" stroke-width="1.6"/><circle cx="9.4" cy="11.3" r=".9" fill="#fff"/><circle cx="12.3" cy="10.3" r=".9" fill="#fff"/><circle cx="14.8" cy="11.5" r=".9" fill="#fff"/></svg>`,
+  grill: `<svg viewBox="0 0 24 24" fill="none"><path d="M2.5 12h19" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><rect x="5.2" y="8.7" width="3.6" height="6.6" rx="1.5" stroke="#fff" stroke-width="1.5"/><rect x="10.2" y="8.7" width="3.6" height="6.6" rx="1.5" stroke="#fff" stroke-width="1.5"/><rect x="15.2" y="8.7" width="3.6" height="6.6" rx="1.5" stroke="#fff" stroke-width="1.5"/></svg>`,
+  soup: `<svg viewBox="0 0 24 24" fill="none"><path d="M4 12c0 4.5 3.6 7 8 7s8-2.5 8-7" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/><ellipse cx="12" cy="12" rx="8" ry="3.2" stroke="#fff" stroke-width="1.6"/><path d="M9 6.6c0-1.6 1-2.4 1-2.4M15 6.6c0-1.8-1.1-2.6-1.1-2.6" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+  shell: `<svg viewBox="0 0 24 24" fill="none"><path d="M20 13a8 8 0 10-8 8 6 6 0 006-6 4.3 4.3 0 00-4.3-4.3A2.8 2.8 0 0011 13.5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  cocktail: `<svg viewBox="0 0 24 24" fill="none"><path d="M5 5h14l-6.3 7.2v6.3M9.7 18.5h4.6" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 8.5h6" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+  hibiscus: `<svg viewBox="0 0 24 24" fill="none"><path d="M7 6.5h10l-1 12a2 2 0 01-2 1.8h-4a2 2 0 01-2-1.8L7 6.5z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 6.5c-1-1.3-1-2.6 0-3.5m10 3.5c1-1.3 1-2.6 0-3.5" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  wine: `<svg viewBox="0 0 24 24" fill="none"><path d="M8 4c-.9 3.2.1 6.8 4 6.8S16.9 7.2 16 4H8z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M12 10.8V18M9.3 18h5.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  beer: `<svg viewBox="0 0 24 24" fill="none"><path d="M6 8h9v10a2 2 0 01-2 2H8a2 2 0 01-2-2V8z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M15 9.5h1.5A2 2 0 0119 11v3a2 2 0 01-2 2H15" stroke="#fff" stroke-width="1.6"/><path d="M8 8c-.5-1.5.5-2 .3-3.5M11 8c-.5-1.8.6-2.3.3-4" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>`,
+  juice: `<svg viewBox="0 0 24 24" fill="none"><path d="M8 4h8l-1 15a2 2 0 01-2 1.8h-2A2 2 0 019 19L8 4z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.3 9h7.4M8.7 13.5h6.6" stroke="#fff" stroke-width="1.3"/></svg>`,
+  default_food: `<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#fff" stroke-width="1.6"/><path d="M9 9l6 6M15 9l-6 6" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  default_drink: `<svg viewBox="0 0 24 24" fill="none"><path d="M7 5h10l-1.2 13a2 2 0 01-2 1.8h-3.6a2 2 0 01-2-1.8L7 5z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+};
+
+function foodIconFor(item) {
+  const n = item.item_name.toLowerCase();
+  let key;
+  if (n.includes("rice")) key = "rice";
+  else if (n.includes("suya") || n.includes("grill") || n.includes("chicken")) key = "grill";
+  else if (n.includes("soup") || n.includes("yam")) key = "soup";
+  else if (n.includes("snail")) key = "shell";
+  else if (n.includes("chapman") || n.includes("cocktail")) key = "cocktail";
+  else if (n.includes("zobo") || n.includes("hibiscus")) key = "hibiscus";
+  else if (n.includes("wine")) key = "wine";
+  else if (n.includes("lager") || n.includes("beer") || n.includes("star")) key = "beer";
+  else if (n.includes("juice") || n.includes("pineapple")) key = "juice";
+  else key = item.item_type === "food" ? "default_food" : "default_drink";
+  return FOOD_ICONS[key];
+}
+
+function foodTileHtml(item) {
+  const cls = item.item_type === "food" ? "is-food" : "is-drink";
+  return `<div class="food-tile ${cls}">${foodIconFor(item)}</div>`;
+}
+
 // ---------------------------------------------------------------------
 // Role switch
 // ---------------------------------------------------------------------
+const roleSwitchEl = document.querySelector(".role-switch");
+
 document.querySelectorAll(".role-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".role-btn").forEach((b) => {
@@ -61,31 +133,40 @@ document.querySelectorAll(".role-btn").forEach((btn) => {
     });
     btn.classList.add("is-active");
     btn.setAttribute("aria-selected", "true");
+    roleSwitchEl.classList.toggle("is-waiter", btn.dataset.role === "waiter");
     state.role = btn.dataset.role;
-    render();
+    render(true);
   });
 });
 
 // ---------------------------------------------------------------------
 // Customer view
 // ---------------------------------------------------------------------
-function renderCustomer() {
+function renderCustomer(animateEntrance) {
   const categories = {};
   state.menu.forEach((item) => {
     (categories[item.item_type] = categories[item.item_type] || []).push(item);
   });
 
   const categoryLabels = { food: "Food", drink: "Drinks" };
+  let runningIndex = 0;
   const categoryHtml = Object.entries(categories)
-    .map(
-      ([cat, items]) => `
+    .map(([cat, items]) => {
+      const itemsHtml = items
+        .map((item) => {
+          const html = menuItemHtml(item, animateEntrance ? runningIndex : null);
+          runningIndex++;
+          return html;
+        })
+        .join("");
+      return `
       <div class="menu-category">
         <h3>${categoryLabels[cat] || cat}</h3>
-        <div class="menu-grid">
-          ${items.map(menuItemHtml).join("")}
+        <div class="menu-grid${animateEntrance ? " enter-stagger" : ""}">
+          ${itemsHtml}
         </div>
-      </div>`
-    )
+      </div>`;
+    })
     .join("");
 
   const ticketsHtml = state.myOrders.length
@@ -129,7 +210,7 @@ function renderCustomer() {
       const next = (state.cart[id] || 0) + delta;
       if (next <= 0) delete state.cart[id];
       else state.cart[id] = next;
-      renderCustomer();
+      renderCustomer(false);
       renderCartBar();
     });
   });
@@ -143,16 +224,18 @@ function renderCustomer() {
   renderCartBar();
 }
 
-function escapeAttr(str) {
-  return String(str).replace(/"/g, "&quot;");
-}
-
-function menuItemHtml(item) {
+function menuItemHtml(item, staggerIndex) {
   const qty = state.cart[item.id] || 0;
+  const styleAttr = staggerIndex !== null ? ` style="--i:${staggerIndex}"` : "";
   return `
-    <div class="menu-item">
-      <div class="menu-item-name">${item.item_name}</div>
-      <div class="menu-item-meta">${item.prep_time_minutes} min &middot; ${item.item_type}</div>
+    <div class="menu-item"${styleAttr}>
+      <div class="menu-item-top">
+        ${foodTileHtml(item)}
+        <div>
+          <div class="menu-item-name">${item.item_name}</div>
+          <div class="menu-item-meta">${item.prep_time_minutes} min</div>
+        </div>
+      </div>
       <div class="menu-item-footer">
         <div class="menu-item-price">${money(item.price)}</div>
         <div class="qty-control">
@@ -219,7 +302,7 @@ async function placeOrder() {
     localStorage.setItem("chowly_my_orders", JSON.stringify(state.myOrderIds));
     state.myOrders.unshift(order);
     showToast(`Order sent to the kitchen \u2014 about ${order.estimated_waiting_time_minutes} min`);
-    renderCustomer();
+    renderCustomer(false);
   } catch (err) {
     showToast(err.message);
   }
@@ -263,17 +346,19 @@ function orderTicketHtml(order) {
     ? `<div class="ticket-meta"><span>Paid \u2713 ref ${order.payment.transaction_reference}</span></div>`
     : "";
 
+  const statusPop = state.justSettledOrderIds.has(order.id) ? " just-settled" : "";
+
   return `
     <div class="ticket">
       <div class="ticket-head">
         <div class="ticket-title">Table ${order.table_number} &middot; Order #${order.id}</div>
-        <div class="ticket-status status-${order.status}">${statusLabel}</div>
+        <div class="ticket-status status-${order.status}${statusPop}">${statusLabel}</div>
       </div>
       ${rows}
       <div class="ticket-total"><span>Total</span><span>${money(order.total_amount)}</span></div>
       <div class="ticket-meta">
         <span>Waiting time: ~${order.estimated_waiting_time_minutes} min</span>
-        ${order.waiter ? `<span>Waiter: ${order.waiter.first_name} ${order.waiter.last_name}</span>` : ""}
+        ${order.waiter ? `<span class="avatar-tag">${avatarHtml(order.waiter.first_name, order.waiter.last_name, "sm")} ${order.waiter.first_name} ${order.waiter.last_name}</span>` : ""}
       </div>
       ${paymentNote}
       ${payAction ? `<div class="ticket-actions">${payAction}</div>` : ""}
@@ -331,7 +416,7 @@ function wireRatingForm(box) {
       });
       applyOrderUpdate(updated);
       showToast("Thanks for rating your order");
-      render();
+      render(false);
     } catch (err) {
       showToast(err.message);
     }
@@ -353,7 +438,7 @@ function wireComplaintForm(box) {
       });
       applyOrderUpdate(updated);
       showToast("Complaint sent \u2014 thanks for letting us know");
-      render();
+      render(false);
     } catch (err) {
       showToast(err.message);
     }
@@ -365,7 +450,9 @@ async function payOrder(orderId) {
     const updated = await api(`/orders/${orderId}/pay`, { method: "POST" });
     applyOrderUpdate(updated);
     showToast("Payment recorded (pretend) \u2014 see you again soon");
-    render();
+    state.justSettledOrderIds.add(orderId);
+    render(false);
+    setTimeout(() => state.justSettledOrderIds.delete(orderId), 1300);
   } catch (err) {
     showToast(err.message);
   }
@@ -407,23 +494,30 @@ function renderWaiter() {
        <div class="order-list">${settled.map((o) => waiterOrderCardHtml(o, waiters, chefs, bartenders)).join("")}</div>`
     : "";
 
+  const waiterChipsHtml = waiters
+    .map((w) => {
+      const isActive = String(w.id) === String(state.actingWaiterId);
+      return `<button type="button" class="waiter-chip${isActive ? " is-active" : ""}" data-waiter-chip="${w.id}">${avatarHtml(w.first_name, w.last_name, "sm")} ${w.first_name} ${w.last_name}</button>`;
+    })
+    .join("");
+
   app.innerHTML = `
     <div class="section-title">Floor</div>
     <div class="section-hint">Pick up new orders, record who prepared each item, and mark them served.</div>
     <div class="table-picker">
-      <label for="waiter-select">You are</label>
-      <select id="waiter-select">
-        <option value="">Select your name\u2026</option>
-        ${waiters.map((w) => `<option value="${w.id}" ${String(w.id) === String(state.actingWaiterId) ? "selected" : ""}>${w.first_name} ${w.last_name}</option>`).join("")}
-      </select>
+      <label>You are</label>
+      <div class="waiter-picker">${waiterChipsHtml}</div>
     </div>
     <div class="order-list">${listHtml}</div>
     ${settledHtml}
   `;
 
-  document.getElementById("waiter-select").addEventListener("change", (e) => {
-    state.actingWaiterId = e.target.value;
-    localStorage.setItem("chowly_waiter_id", state.actingWaiterId);
+  app.querySelectorAll("[data-waiter-chip]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      state.actingWaiterId = chip.dataset.waiterChip;
+      localStorage.setItem("chowly_waiter_id", state.actingWaiterId);
+      renderWaiter();
+    });
   });
 
   app.querySelectorAll("[data-assign-order]").forEach((btn) => {
@@ -477,18 +571,20 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
     actionHtml = `<div class="ticket-actions"><button class="btn-primary" data-pay-order="${order.id}">Record payment (pretend)</button></div>`;
   }
 
+  const statusPop = state.justSettledOrderIds.has(order.id) ? " just-settled" : "";
+
   return `
     <div class="ticket">
       <div class="ticket-head">
         <div class="ticket-title">Table ${order.table_number} &middot; Order #${order.id}</div>
-        <div class="ticket-status status-${order.status}">${statusLabel}</div>
+        <div class="ticket-status status-${order.status}${statusPop}">${statusLabel}</div>
       </div>
       <div class="ticket-meta"><span>${order.customer.first_name} ${order.customer.last_name}</span><span>${order.customer.phone_number}</span></div>
       ${rows}
       <div class="ticket-total"><span>Total</span><span>${money(order.total_amount)}</span></div>
       <div class="ticket-meta">
         <span>Waiting time: ~${order.estimated_waiting_time_minutes} min</span>
-        ${order.waiter ? `<span>Waiter: ${order.waiter.first_name} ${order.waiter.last_name}</span>` : ""}
+        ${order.waiter ? `<span class="avatar-tag">${avatarHtml(order.waiter.first_name, order.waiter.last_name, "sm")} ${order.waiter.first_name} ${order.waiter.last_name}</span>` : ""}
       </div>
       ${complaintHtml}
       ${ratingHtml}
@@ -498,8 +594,14 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
 
 function preparationRowHtml(orderId, prep, chefs, bartenders) {
   if (prep.status === "completed") {
-    const who = prep.chef ? `Chef ${prep.chef.first_name} ${prep.chef.last_name}` : `Bartender ${prep.bartender.first_name} ${prep.bartender.last_name}`;
-    return `<div class="prep-row prep-done"><span>${prep.menu_item.item_name}</span><span>${who} \u2713</span></div>`;
+    const person = prep.chef || prep.bartender;
+    const roleWord = prep.chef ? "Chef" : "Bartender";
+    const justDone = state.justCompletedPrepIds.has(prep.order_item_id) ? " prep-pop" : "";
+    return `
+      <div class="prep-row prep-done${justDone}">
+        <span>${prep.menu_item.item_name}</span>
+        <span class="prep-done-who">${avatarHtml(person.first_name, person.last_name, "sm")} ${roleWord} ${person.first_name} ${person.last_name} \u2713</span>
+      </div>`;
   }
 
   const isFood = prep.menu_item.item_type === "food";
@@ -552,7 +654,9 @@ async function recordPreparation(orderId, orderItemId) {
       body: JSON.stringify(payload),
     });
     applyOrderUpdate(updated);
+    state.justCompletedPrepIds.add(orderItemId);
     renderWaiter();
+    setTimeout(() => state.justCompletedPrepIds.delete(orderItemId), 600);
   } catch (err) {
     showToast(err.message);
   }
@@ -576,16 +680,10 @@ async function loadWaiterOrders() {
 // ---------------------------------------------------------------------
 // Render dispatch + polling
 // ---------------------------------------------------------------------
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-async function render() {
+async function render(isUserAction) {
   if (state.role === "customer") {
     await loadMyOrders();
-    renderCustomer();
+    renderCustomer(!!isUserAction);
   } else {
     await loadWaiterOrders();
     renderWaiter();
@@ -596,9 +694,9 @@ async function init() {
   const [menu, staff] = await Promise.all([api("/menu"), api("/staff")]);
   state.menu = menu;
   state.staff = staff;
-  await render();
+  await render(true);
   setInterval(() => {
-    if (document.visibilityState === "visible") render();
+    if (document.visibilityState === "visible") render(false);
   }, 6000);
 }
 

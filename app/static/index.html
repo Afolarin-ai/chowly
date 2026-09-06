@@ -11,12 +11,22 @@
 </head>
 <body>
 
+<div class="scene-glow scene-glow-a" aria-hidden="true"></div>
+<div class="scene-glow scene-glow-b" aria-hidden="true"></div>
+
 <header class="topbar">
   <div class="brand">
+    <svg class="brand-logo" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="16" cy="20" r="10" fill="#F6F0E4" stroke="#211D19" stroke-width="1.8"/>
+      <path d="M10.5 11c0 1.9 1.4 2.5 1.4 4.4 0 1.1-.7 1.7-.7 1.7" stroke="#E0952B" stroke-width="2.1" stroke-linecap="round"/>
+      <path d="M16 9c0 2.1 1.5 2.8 1.5 5 0 1.2-.8 1.9-.8 1.9" stroke="#E0952B" stroke-width="2.1" stroke-linecap="round"/>
+      <path d="M21.5 11c0 1.9-1.4 2.5-1.4 4.4 0 1.1.7 1.7.7 1.7" stroke="#E0952B" stroke-width="2.1" stroke-linecap="round"/>
+    </svg>
     <span class="brand-mark">Chowly</span>
     <span class="brand-sub">table-side ordering</span>
   </div>
   <div class="role-switch" role="tablist" aria-label="Switch role">
+    <span class="role-switch-thumb" data-role-thumb></span>
     <button class="role-btn is-active" data-role="customer" role="tab" aria-selected="true">Customer</button>
     <button class="role-btn" data-role="waiter" role="tab" aria-selected="false">Waiter</button>
   </div>
