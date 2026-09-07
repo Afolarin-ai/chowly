@@ -14,6 +14,7 @@ const state = {
   actingWaiterId: localStorage.getItem("chowly_waiter_id") || "",
   justCompletedPrepIds: new Set(),   // order_item_id -> plays the "just recorded" pop once
   justSettledOrderIds: new Set(),    // order_id -> plays the "just paid" glow once
+  todayStats: null,
 };
 
 const app = document.getElementById("app");
@@ -142,9 +143,11 @@ document.querySelectorAll(".role-btn").forEach((btn) => {
 // ---------------------------------------------------------------------
 function renderCustomer(animateEntrance) {
   const categories = {};
-  state.menu.forEach((item) => {
-    (categories[item.item_type] = categories[item.item_type] || []).push(item);
-  });
+  state.menu
+    .filter((item) => item.availability_status !== "sold_out")
+    .forEach((item) => {
+      (categories[item.item_type] = categories[item.item_type] || []).push(item);
+    });
 
   const categoryLabels = { food: "Food", drink: "Drinks" };
   let runningIndex = 0;
@@ -213,6 +216,12 @@ function renderCustomer(animateEntrance) {
   app.querySelectorAll("[data-rating-form]").forEach(wireRatingForm);
   app.querySelectorAll("[data-pay-order]").forEach((btn) => {
     btn.addEventListener("click", () => payOrder(Number(btn.dataset.payOrder)));
+  });
+  app.querySelectorAll("[data-cancel-order]").forEach((btn) => {
+    btn.addEventListener("click", () => cancelOrder(Number(btn.dataset.cancelOrder)));
+  });
+  app.querySelectorAll("[data-print-order]").forEach((btn) => {
+    btn.addEventListener("click", () => printOrder(Number(btn.dataset.printOrder)));
   });
 
   renderCartBar();
@@ -307,6 +316,7 @@ function orderTicketHtml(order) {
     assigned: assignedStageLabel(order),
     served: "Served",
     paid: "Paid",
+    cancelled: "Cancelled",
   }[order.status];
 
   const rows = order.items
@@ -315,8 +325,9 @@ function orderTicketHtml(order) {
     )
     .join("");
 
-  const canRate = !order.rating && order.status !== "placed" && order.status !== "assigned";
-  const canComplain = !order.complaint && order.status !== "placed" && order.status !== "assigned";
+  const inactiveStatuses = ["placed", "assigned", "cancelled"];
+  const canRate = !order.rating && !inactiveStatuses.includes(order.status);
+  const canComplain = !order.complaint && !inactiveStatuses.includes(order.status);
 
   const ratingSection = order.rating
     ? `<div class="rating-filed">You rated this order ${order.rating.rating_value}/5${order.rating.comment ? ` \u2014 "${escapeHtml(order.rating.comment)}"` : ""}</div>`
@@ -334,6 +345,10 @@ function orderTicketHtml(order) {
     !order.payment && order.status === "served"
       ? `<button class="btn-primary" data-pay-order="${order.id}">Pay (pretend)</button>`
       : "";
+
+  const cancelAction = isCancellable(order)
+    ? `<button class="btn-cancel" data-cancel-order="${order.id}">Cancel order</button>`
+    : "";
 
   const paymentNote = order.payment
     ? `<div class="ticket-meta"><span>Paid \u2713 ref ${order.payment.transaction_reference}</span></div>`
@@ -354,10 +369,23 @@ function orderTicketHtml(order) {
         ${order.waiter ? `<span class="avatar-tag">${avatarHtml(order.waiter.first_name, order.waiter.last_name, "sm")} ${order.waiter.first_name} ${order.waiter.last_name}</span>` : ""}
       </div>
       ${paymentNote}
-      ${payAction ? `<div class="ticket-actions">${payAction}</div>` : ""}
+      ${order.status !== "cancelled" ? `
+      <div class="ticket-actions">
+        ${payAction}
+        <button class="btn-print" data-print-order="${order.id}">Print ${order.payment ? "receipt" : "ticket"}</button>
+        ${cancelAction}
+      </div>` : ""}
       ${ratingSection}
       ${complaintSection}
     </div>`;
+}
+
+// Cancellable while it's still just sitting in the queue: nobody's picked
+// it up yet, or a waiter has but no chef/bartender has actually started.
+function isCancellable(order) {
+  if (order.status === "placed") return true;
+  if (order.status !== "assigned") return false;
+  return !order.preparations.some((p) => p.status === "completed");
 }
 
 function ratingFormHtml(orderId) {
@@ -451,6 +479,52 @@ async function payOrder(orderId) {
   }
 }
 
+async function cancelOrder(orderId) {
+  try {
+    const updated = await api(`/orders/${orderId}/cancel`, { method: "POST" });
+    applyOrderUpdate(updated);
+    showToast(`Order #${orderId} cancelled`);
+    render(false);
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+function printOrder(orderId) {
+  const order =
+    state.myOrders.find((o) => o.id === orderId) || state.waiterOrders.find((o) => o.id === orderId);
+  if (!order) {
+    showToast("Couldn't find that order to print");
+    return;
+  }
+
+  const isReceipt = !!order.payment;
+  const rows = order.items
+    .map((i) => {
+      const prep = order.preparations.find((p) => p.order_item_id === i.id);
+      const who = prep && prep.status === "completed" ? (prep.chef || prep.bartender) : null;
+      const whoLine = who ? ` (${who.first_name} ${who.last_name})` : "";
+      return `<tr><td>${i.quantity}\u00d7 ${i.menu_item.item_name}${isReceipt ? "" : whoLine}</td><td style="text-align:right">${money(i.subtotal)}</td></tr>`;
+    })
+    .join("");
+
+  document.getElementById("print-area").innerHTML = `
+    <div class="print-ticket">
+      <span class="print-tag">${isReceipt ? "RECEIPT" : "KITCHEN TICKET"}</span>
+      <h2>Chowly \u2014 Table ${order.table_number}</h2>
+      <div class="print-meta">
+        Order #${order.id} &middot; ${new Date(order.order_time).toLocaleString()}<br>
+        ${order.customer.first_name} ${order.customer.last_name}
+        ${order.waiter ? ` &middot; Waiter: ${order.waiter.first_name} ${order.waiter.last_name}` : ""}
+      </div>
+      <table>${rows}</table>
+      <div class="print-total">Total: ${money(order.total_amount)}</div>
+      ${isReceipt ? `<div class="print-meta">Paid (pretend) &middot; ref ${order.payment.transaction_reference}</div>` : ""}
+    </div>`;
+
+  window.print();
+}
+
 function applyOrderUpdate(updated) {
   const midx = state.myOrders.findIndex((o) => o.id === updated.id);
   if (midx >= 0) state.myOrders[midx] = updated;
@@ -475,8 +549,9 @@ async function loadMyOrders() {
 function renderWaiter() {
   const { waiters, chefs, bartenders } = state.staff;
 
-  const active = state.waiterOrders.filter((o) => o.status !== "paid");
+  const active = state.waiterOrders.filter((o) => o.status !== "paid" && o.status !== "cancelled");
   const settled = state.waiterOrders.filter((o) => o.status === "paid");
+  const cancelled = state.waiterOrders.filter((o) => o.status === "cancelled");
 
   const listHtml = active.length
     ? active.map((o) => waiterOrderCardHtml(o, waiters, chefs, bartenders)).join("")
@@ -487,12 +562,42 @@ function renderWaiter() {
        <div class="order-list">${settled.map((o) => waiterOrderCardHtml(o, waiters, chefs, bartenders)).join("")}</div>`
     : "";
 
+  const cancelledHtml = cancelled.length
+    ? `<div class="section-title" style="margin-top:44px">Cancelled</div>
+       <div class="order-list">${cancelled.map((o) => waiterOrderCardHtml(o, waiters, chefs, bartenders)).join("")}</div>`
+    : "";
+
   const waiterChipsHtml = waiters
     .map((w) => {
       const isActive = String(w.id) === String(state.actingWaiterId);
       return `<button type="button" class="waiter-chip${isActive ? " is-active" : ""}" data-waiter-chip="${w.id}">${avatarHtml(w.first_name, w.last_name, "sm")} ${w.first_name} ${w.last_name}</button>`;
     })
     .join("");
+
+  const s = state.todayStats;
+  const statsHtml = s
+    ? `<div class="stats-grid">
+        <div class="stat-card"><div class="stat-value">${money(s.revenue_today)}</div><div class="stat-label">Revenue today</div></div>
+        <div class="stat-card"><div class="stat-value">${s.orders_today}</div><div class="stat-label">Orders today</div></div>
+        <div class="stat-card"><div class="stat-value">${s.top_item ? escapeHtml(s.top_item) : "\u2014"}</div><div class="stat-label">${s.top_item ? `Top seller \u00b7 ${s.top_item_quantity} sold` : "Top seller"}</div></div>
+        <div class="stat-card"><div class="stat-value">${s.average_rating !== null ? `${s.average_rating}/5` : "\u2014"}</div><div class="stat-label">Avg rating today</div></div>
+      </div>`
+    : "";
+
+  const manageMenuHtml = `
+    <div class="manage-menu">
+      <label>Menu availability</label>
+      <div class="manage-menu-list">
+        ${state.menu
+          .map((item) => {
+            const soldOut = item.availability_status === "sold_out";
+            return `<span class="manage-chip${soldOut ? " is-sold-out" : ""}">${item.item_name}
+              <button type="button" class="manage-chip-toggle" data-toggle-availability="${item.id}">${soldOut ? "Un-86" : "86 it"}</button></span>`;
+          })
+          .join("")}
+      </div>
+      <a class="qr-link" href="/qr" target="_blank" rel="noopener">Print table QR codes &#8599;</a>
+    </div>`;
 
   app.innerHTML = `
     <div class="intro-panel">
@@ -502,9 +607,12 @@ function renderWaiter() {
         <label>You are</label>
         <div class="waiter-picker">${waiterChipsHtml}</div>
       </div>
+      ${statsHtml}
+      ${manageMenuHtml}
     </div>
     <div class="order-list">${listHtml}</div>
     ${settledHtml}
+    ${cancelledHtml}
   `;
 
   app.querySelectorAll("[data-waiter-chip]").forEach((chip) => {
@@ -513,6 +621,10 @@ function renderWaiter() {
       localStorage.setItem("chowly_waiter_id", state.actingWaiterId);
       renderWaiter();
     });
+  });
+
+  app.querySelectorAll("[data-toggle-availability]").forEach((btn) => {
+    btn.addEventListener("click", () => toggleAvailability(Number(btn.dataset.toggleAvailability)));
   });
 
   app.querySelectorAll("[data-assign-order]").forEach((btn) => {
@@ -527,6 +639,21 @@ function renderWaiter() {
   app.querySelectorAll("[data-pay-order]").forEach((btn) => {
     btn.addEventListener("click", () => payOrder(Number(btn.dataset.payOrder)));
   });
+  app.querySelectorAll("[data-print-order]").forEach((btn) => {
+    btn.addEventListener("click", () => printOrder(Number(btn.dataset.printOrder)));
+  });
+
+  renderCartBar();
+}
+
+async function toggleAvailability(itemId) {
+  try {
+    await api(`/menu/${itemId}/toggle-availability`, { method: "POST" });
+    state.menu = await api("/menu");
+    renderWaiter();
+  } catch (err) {
+    showToast(err.message);
+  }
 }
 
 function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
@@ -535,6 +662,7 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
     assigned: assignedStageLabel(order),
     served: "Served \u2014 awaiting payment",
     paid: "Paid",
+    cancelled: "Cancelled by customer",
   }[order.status];
 
   const rows = order.items
@@ -567,6 +695,10 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
   }
 
   const statusPop = state.justSettledOrderIds.has(order.id) ? " just-settled" : "";
+  const printHtml =
+    order.status !== "cancelled"
+      ? `<div class="ticket-actions"><button class="btn-print" data-print-order="${order.id}">Print ${order.payment ? "receipt" : "ticket"}</button></div>`
+      : "";
 
   return `
     <div class="ticket">
@@ -584,6 +716,7 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
       ${complaintHtml}
       ${ratingHtml}
       ${actionHtml}
+      ${printHtml}
     </div>`;
 }
 
@@ -676,19 +809,29 @@ async function loadWaiterOrders() {
 // Render dispatch + polling
 // ---------------------------------------------------------------------
 async function render(isUserAction) {
+  state.menu = await api("/menu");
   if (state.role === "customer") {
     await loadMyOrders();
     renderCustomer(!!isUserAction);
   } else {
-    await loadWaiterOrders();
+    await Promise.all([loadWaiterOrders(), loadTodayStats()]);
     renderWaiter();
   }
 }
 
+async function loadTodayStats() {
+  state.todayStats = await api("/stats/today").catch(() => null);
+}
+
 async function init() {
-  const [menu, staff] = await Promise.all([api("/menu"), api("/staff")]);
-  state.menu = menu;
-  state.staff = staff;
+  const params = new URLSearchParams(window.location.search);
+  const tableParam = params.get("table");
+  if (tableParam) {
+    state.tableNumber = tableParam;
+    localStorage.setItem("chowly_table", state.tableNumber);
+  }
+
+  state.staff = await api("/staff");
   await render(true);
   setInterval(() => {
     if (document.visibilityState === "visible") render(false);
