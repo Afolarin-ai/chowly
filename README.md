@@ -73,15 +73,10 @@ prior engineered-model assignment, carried through unchanged: `Customer`,
 per the instruction to change the model where the build requires it and
 say why:
 
-- **No `CustomerID`-based login, and phone number is optional.** The
+- **No `CustomerID`-based login.** The
   assignment explicitly states "logins are not required, a simple switch
   is enough." `Customer` still exists as a real table — a customer's name
-  is captured at order time, with phone number as an optional field for
-  recognizing a returning customer (get-or-created by phone when given;
-  a fresh row is created per order when it isn't) — but there's no
-  authentication layer sitting in front of it. Making phone optional was
-  a deliberate UX call once the app was actually being used: requiring it
-  added friction for no real benefit in a no-login flow.
+  is captured at order time.
 - **A single seeded `Restaurant` and `Menu`.** The original model supports
   many restaurants, each with their own menu. This build is a single
   restaurant's ordering system (Chowly deployed *for* one restaurant, not

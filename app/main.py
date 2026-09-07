@@ -364,30 +364,121 @@ def table_qr(table_number: int, request: Request):
 def qr_sheet(request: Request, count: int = 12):
     base = str(request.base_url).rstrip("/")
     cards = "".join(
-        f'<div class="qr-card"><img src="{base}api/qr/{n}" alt="Table {n} QR code">'
+        f'<div class="qr-card"><div class="qr-card-accent"></div>'
+        f'<img src="{base}/api/qr/{n}" alt="Table {n} QR code">'
         f'<div class="qr-label">Table {n}</div></div>'
         for n in range(1, count + 1)
     )
     return f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>Chowly — Table QR Codes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#F8EFDC; margin:0; padding:36px; color:#1A1512; }}
-  h1 {{ font-family: Georgia, serif; margin-bottom:4px; }}
-  p {{ color:#5C4E40; margin-top:0; }}
-  .grid {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px; margin-top:28px; }}
-  .qr-card {{ background:white; border-radius:8px; padding:16px; text-align:center; box-shadow:0 2px 10px rgba(26,21,18,.12); }}
-  .qr-card img {{ width:100%; height:auto; display:block; }}
-  .qr-label {{ margin-top:10px; font-weight:700; font-size:18px; }}
+  :root {{
+    --ivory: #F8EFDC;
+    --slate: #1A1512;
+    --slate-soft: #5C4E40;
+    --marigold: #EB8A1E;
+    --marigold-deep: #A85712;
+    --teal: #1E7A6E;
+    --line: rgba(26, 21, 18, 0.14);
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    font-family: "Sora", -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--ivory);
+    margin: 0;
+    padding: 0;
+    color: var(--slate);
+    position: relative;
+    min-height: 100vh;
+  }}
+  body::before {{
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-image: linear-gradient(175deg, rgba(248,239,220,0.55) 0%, rgba(248,239,220,0.75) 100%), url("/static/images/bg/waiter.jpg");
+    background-size: cover;
+    background-position: center 30%;
+  }}
+  .scene-glow {{
+    position: fixed;
+    top: -140px; left: -100px;
+    width: 420px; height: 420px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(235,138,30,0.35), transparent 70%);
+    filter: blur(70px);
+    z-index: 0;
+  }}
+  .page {{ position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 40px 36px 60px; }}
+  .header-panel {{
+    background: rgba(255, 252, 245, 0.82);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: 16px;
+    padding: 26px 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 6px 16px rgba(26,21,18,0.09);
+  }}
+  .brand-row {{ display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }}
+  h1 {{
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 700;
+    font-size: 30px;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }}
+  p {{ color: var(--slate-soft); margin: 6px 0 0; font-size: 15px; }}
+  .grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 20px;
+  }}
+  .qr-card {{
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+    text-align: center;
+    box-shadow: 0 6px 16px rgba(26,21,18,0.10);
+    transition: transform 0.15s ease;
+  }}
+  .qr-card-accent {{ height: 5px; background: linear-gradient(90deg, var(--marigold), var(--teal)); }}
+  .qr-card img {{ width: 78%; height: auto; display: block; margin: 18px auto 8px; }}
+  .qr-label {{
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: 19px;
+    padding: 6px 0 18px;
+  }}
   @media print {{
-    body {{ background:white; padding:12px; }}
-    .qr-card {{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }}
-    p {{ display:none; }}
+    body::before, .scene-glow {{ display: none; }}
+    body {{ background: white; }}
+    .header-panel {{ background: white; box-shadow: none; border: none; backdrop-filter: none; }}
+    .qr-card {{ box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }}
+    p {{ display: none; }}
   }}
 </style></head>
 <body>
-  <h1>Chowly — Table QR Codes</h1>
-  <p>Print this page and place one card per table. Scanning a code opens the ordering page with that table already filled in.</p>
-  <div class="grid">{cards}</div>
+  <div class="scene-glow"></div>
+  <div class="page">
+    <div class="header-panel">
+      <div class="brand-row">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="20" r="10" fill="#F6F0E4" stroke="#1A1512" stroke-width="1.8"/>
+          <path d="M10.5 11c0 1.9 1.4 2.5 1.4 4.4 0 1.1-.7 1.7-.7 1.7" stroke="#EB8A1E" stroke-width="2.1" stroke-linecap="round"/>
+          <path d="M16 9c0 2.1 1.5 2.8 1.5 5 0 1.2-.8 1.9-.8 1.9" stroke="#EB8A1E" stroke-width="2.1" stroke-linecap="round"/>
+          <path d="M21.5 11c0 1.9-1.4 2.5-1.4 4.4 0 1.1.7 1.7.7 1.7" stroke="#EB8A1E" stroke-width="2.1" stroke-linecap="round"/>
+        </svg>
+        <h1>Chowly &mdash; Table QR Codes</h1>
+      </div>
+      <p>Print this page and place one card per table. Scanning a code opens the ordering page with that table already filled in.</p>
+    </div>
+    <div class="grid">{cards}</div>
+  </div>
 </body></html>"""
 
 
