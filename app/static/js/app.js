@@ -72,7 +72,7 @@ function assignedStageLabel(order) {
 // ---------------------------------------------------------------------
 // Generated avatars — deterministic color + initials, no fake stock photos
 // ---------------------------------------------------------------------
-const AVATAR_PALETTE = ["#E0952B", "#4E6B4B", "#4F7A70", "#B33A3A", "#7A5A16", "#33586E"];
+const AVATAR_PALETTE = ["#EB8A1E", "#1E7A52", "#1E7A6E", "#D33F3F", "#8C3A63", "#A85712"];
 
 function avatarColor(name) {
   let hash = 0;
@@ -159,7 +159,7 @@ function renderCustomer(animateEntrance) {
         .join("");
       return `
       <div class="menu-category">
-        <h3>${categoryLabels[cat] || cat}</h3>
+        <h3 class="cat-${cat}">${categoryLabels[cat] || cat}</h3>
         <div class="menu-grid${animateEntrance ? " enter-stagger" : ""}">
           ${itemsHtml}
         </div>
@@ -174,13 +174,15 @@ function renderCustomer(animateEntrance) {
     : "";
 
   app.innerHTML = `
-    <div class="section-title">Tonight's menu</div>
-    <div class="section-hint">Tell us who you are and which table you're at, then send your order to the kitchen.</div>
-    <div class="table-picker">
-      <label for="name-input">Your name</label>
-      <input id="name-input" type="text" value="${escapeAttr(state.customerName)}" placeholder="e.g. Daniel Adeyemi">
-      <label for="table-input">Table</label>
-      <input id="table-input" type="number" min="1" value="${state.tableNumber}" placeholder="e.g. 5">
+    <div class="intro-panel">
+      <div class="section-title">Tonight's menu</div>
+      <div class="section-hint">Tell us who you are and which table you're at, then send your order to the kitchen.</div>
+      <div class="table-picker">
+        <label for="name-input">Your name</label>
+        <input id="name-input" type="text" value="${escapeAttr(state.customerName)}" placeholder="e.g. Daniel Adeyemi">
+        <label for="table-input">Table</label>
+        <input id="table-input" type="number" min="1" value="${state.tableNumber}" placeholder="e.g. 5">
+      </div>
     </div>
     ${categoryHtml}
     ${ticketsHtml}
@@ -219,8 +221,9 @@ function renderCustomer(animateEntrance) {
 function menuItemHtml(item, staggerIndex) {
   const qty = state.cart[item.id] || 0;
   const styleAttr = staggerIndex !== null ? ` style="--i:${staggerIndex}"` : "";
+  const typeClass = item.item_type === "drink" ? " is-drink" : "";
   return `
-    <div class="menu-item"${styleAttr}>
+    <div class="menu-item${typeClass}"${styleAttr}>
       ${menuItemPhotoHtml(item)}
       <div class="menu-item-body">
         <div class="menu-item-name">${item.item_name}</div>
@@ -492,11 +495,13 @@ function renderWaiter() {
     .join("");
 
   app.innerHTML = `
-    <div class="section-title">Floor</div>
-    <div class="section-hint">Pick up new orders, record who prepared each item, and mark them served.</div>
-    <div class="table-picker">
-      <label>You are</label>
-      <div class="waiter-picker">${waiterChipsHtml}</div>
+    <div class="intro-panel">
+      <div class="section-title">Floor</div>
+      <div class="section-hint">Pick up new orders, record who prepared each item, and mark them served.</div>
+      <div class="table-picker">
+        <label>You are</label>
+        <div class="waiter-picker">${waiterChipsHtml}</div>
+      </div>
     </div>
     <div class="order-list">${listHtml}</div>
     ${settledHtml}
