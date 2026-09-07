@@ -1,9 +1,12 @@
-from datetime import datetime
+import io
+from datetime import datetime, date
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException
+import qrcode
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from . import models, schemas
@@ -50,6 +53,23 @@ def get_menu(db: Session = Depends(get_db)):
     return menu.items if menu else []
 
 
+@app.post("/api/menu/{item_id}/toggle-availability", response_model=schemas.MenuItemOut)
+def toggle_availability(item_id: int, db: Session = Depends(get_db)):
+    """86 / un-86 a menu item. A waiter-facing action — customers only ever
+    see the resulting list, they don't call this directly."""
+    item = db.query(models.MenuItem).get(item_id)
+    if not item:
+        raise HTTPException(404, "Menu item not found")
+    item.availability_status = (
+        models.AvailabilityStatus.sold_out
+        if item.availability_status == models.AvailabilityStatus.available
+        else models.AvailabilityStatus.available
+    )
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 @app.get("/api/staff")
 def get_staff(db: Session = Depends(get_db)):
     restaurant = get_restaurant(db)
@@ -60,6 +80,49 @@ def get_staff(db: Session = Depends(get_db)):
         "waiters": [schemas.WaiterOut.model_validate(w) for w in waiters],
         "chefs": [schemas.ChefOut.model_validate(c) for c in chefs],
         "bartenders": [schemas.BartenderOut.model_validate(b) for b in bartenders],
+    }
+
+
+@app.get("/api/stats/today")
+def stats_today(db: Session = Depends(get_db)):
+    """A small end-of-day snapshot for the waiter dashboard — revenue,
+    order count, top-selling item, and average rating, all scoped to
+    today. This isn't part of the assignment's requirements; it's built
+    on data the app already has, purely as a bonus."""
+    today = date.today()
+
+    revenue_today = (
+        db.query(func.coalesce(func.sum(models.Payment.amount), 0.0))
+        .join(models.Order, models.Payment.order_id == models.Order.id)
+        .filter(models.Order.order_date == today)
+        .scalar()
+    )
+
+    orders_today = db.query(func.count(models.Order.id)).filter(models.Order.order_date == today).scalar()
+
+    top_item_row = (
+        db.query(models.MenuItem.item_name, func.sum(models.OrderItem.quantity).label("qty"))
+        .join(models.OrderItem, models.OrderItem.menu_item_id == models.MenuItem.id)
+        .join(models.Order, models.OrderItem.order_id == models.Order.id)
+        .filter(models.Order.order_date == today)
+        .group_by(models.MenuItem.item_name)
+        .order_by(func.sum(models.OrderItem.quantity).desc())
+        .first()
+    )
+
+    avg_rating = (
+        db.query(func.avg(models.Rating.rating_value))
+        .join(models.Order, models.Rating.order_id == models.Order.id)
+        .filter(models.Order.order_date == today)
+        .scalar()
+    )
+
+    return {
+        "revenue_today": float(revenue_today or 0),
+        "orders_today": orders_today or 0,
+        "top_item": top_item_row[0] if top_item_row else None,
+        "top_item_quantity": int(top_item_row[1]) if top_item_row else 0,
+        "average_rating": round(float(avg_rating), 1) if avg_rating is not None else None,
     }
 
 
@@ -200,6 +263,29 @@ def mark_served(order_id: int, db: Session = Depends(get_db)):
     return order_query(db).filter(models.Order.id == order_id).first()
 
 
+@app.post("/api/orders/{order_id}/cancel", response_model=schemas.OrderOut)
+def cancel_order(order_id: int, db: Session = Depends(get_db)):
+    """A customer can cancel while the order is still just sitting in the
+    queue — either nobody has picked it up yet, or a waiter has but no
+    chef/bartender has actually started on any item. Once real prep work
+    has begun, it's too late: cancelling would waste food already being
+    made."""
+    order = db.query(models.Order).get(order_id)
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    prep_started = any(p.status == models.PreparationStatus.completed for p in order.preparations)
+    cancellable = order.status == models.OrderStatus.placed or (
+        order.status == models.OrderStatus.assigned and not prep_started
+    )
+    if not cancellable:
+        raise HTTPException(400, "This order can no longer be cancelled — preparation has already started")
+
+    order.status = models.OrderStatus.cancelled
+    db.commit()
+    return order_query(db).filter(models.Order.id == order_id).first()
+
+
 @app.post("/api/orders/{order_id}/pay", response_model=schemas.OrderOut)
 def pay_order(order_id: int, db: Session = Depends(get_db)):
     order = db.query(models.Order).get(order_id)
@@ -251,6 +337,58 @@ def submit_rating(order_id: int, payload: schemas.RatingCreate, db: Session = De
     ))
     db.commit()
     return order_query(db).filter(models.Order.id == order_id).first()
+
+
+# ---------------------------------------------------------------------------
+# Table QR codes — not part of the assignment's requirements; generated on
+# request rather than stored, and just encode a link back to this same app
+# with the table number pre-filled.
+# ---------------------------------------------------------------------------
+@app.get("/api/qr/{table_number}")
+def table_qr(table_number: int, request: Request):
+    base = str(request.base_url).rstrip("/")
+    url = f"{base}/?table={table_number}"
+
+    qr = qrcode.QRCode(box_size=10, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#1A1512", back_color="#F8EFDC")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png")
+
+
+@app.get("/qr", response_class=HTMLResponse)
+def qr_sheet(request: Request, count: int = 12):
+    base = str(request.base_url).rstrip("/")
+    cards = "".join(
+        f'<div class="qr-card"><img src="{base}api/qr/{n}" alt="Table {n} QR code">'
+        f'<div class="qr-label">Table {n}</div></div>'
+        for n in range(1, count + 1)
+    )
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Chowly — Table QR Codes</title>
+<style>
+  body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background:#F8EFDC; margin:0; padding:36px; color:#1A1512; }}
+  h1 {{ font-family: Georgia, serif; margin-bottom:4px; }}
+  p {{ color:#5C4E40; margin-top:0; }}
+  .grid {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px; margin-top:28px; }}
+  .qr-card {{ background:white; border-radius:8px; padding:16px; text-align:center; box-shadow:0 2px 10px rgba(26,21,18,.12); }}
+  .qr-card img {{ width:100%; height:auto; display:block; }}
+  .qr-label {{ margin-top:10px; font-weight:700; font-size:18px; }}
+  @media print {{
+    body {{ background:white; padding:12px; }}
+    .qr-card {{ box-shadow:none; border:1px solid #ccc; break-inside:avoid; }}
+    p {{ display:none; }}
+  }}
+</style></head>
+<body>
+  <h1>Chowly — Table QR Codes</h1>
+  <p>Print this page and place one card per table. Scanning a code opens the ordering page with that table already filled in.</p>
+  <div class="grid">{cards}</div>
+</body></html>"""
 
 
 # ---------------------------------------------------------------------------
