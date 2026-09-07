@@ -39,7 +39,10 @@ chowly/
 │   └── static/           # the entire frontend
 │       ├── index.html
 │       ├── css/style.css
-│       └── js/app.js
+│       ├── js/app.js
+│       └── images/
+│           ├── food/     # dish photography, one file per menu item
+│           └── bg/       # kitchen + dining-room background photos
 ├── requirements.txt
 ├── render.yaml
 └── .gitignore
@@ -109,16 +112,24 @@ per order.
 Menu items show real dish photography (resized and compressed from the
 original uploads down to a few KB each) instead of stock icons, laid out
 like a typical food-ordering app: photo on top, name/price/controls
-below. Two venue photos (kitchen, dining room) sit behind everything as
-a very heavily washed-out background that swaps with the Customer/Waiter
-toggle — enough for ambient depth, not enough to compete with foreground
-text. Staff are represented with generated initials avatars (a
-deterministic color per name), not fake stock headshots of people who
-don't exist. Motion is scoped deliberately: one staggered entrance for
-the menu on first load, and functional micro-motion elsewhere (the role
-toggle, the cart bar, a prep row popping when checked off, a ticket
-glowing once when paid) — not hover animations on every card, which
-reads as generic rather than intentional.
+below, with a category-coded accent stripe (marigold for food, teal for
+drinks) along the top edge of each card. Two venue photos (kitchen,
+dining room) sit behind everything and swap with the Customer/Waiter
+toggle — visible enough for real ambient depth, not just a decorative
+gradient, with legibility coming from frosted-glass panels
+(`backdrop-filter: blur`) behind the header and intro text rather than
+from flattening the photo into near-invisibility. Staff are represented
+with generated initials avatars (a deterministic color per name), not
+fake stock headshots of people who don't exist. Type pairs Fraunces
+(display — pushed to a heavier weight, with italic used for the tagline
+and category headers) with Sora (body/UI). The color palette is
+deliberately saturated rather than a muted "safe" version of itself —
+status pills, prices, and section accents all use fuller-strength color
+rather than pastel tints. Motion is scoped deliberately: one staggered
+entrance for the menu on first load, and functional micro-motion
+elsewhere (the role toggle, the cart bar, a prep row popping when
+checked off, a ticket glowing once when paid) — not hover animations on
+every card, which reads as generic rather than intentional.
 
 ### Deployment
 See [Section 5](#5-how-to-deploy-it-yourself) below for the exact steps —
@@ -138,7 +149,7 @@ not just a chat that suggested snippets.
 deadline, prioritizing a polished, non-templated visual design over speed
 of scaffolding.
 
-**How it actually went, in two passes:**
+**How it actually went, across several passes:**
 1. Claude first designed a simplified schema from scratch (no separate
    Customer/Restaurant/Menu tables, chef/bartender fields bolted directly
    onto `Order`, complaint and rating merged into one entity) because it
@@ -150,17 +161,41 @@ of scaffolding.
    back into two independent actions. I chose to spend the extra time on
    this rather than keep the simplified version, specifically so the
    submitted model matches the one I was actually graded on designing.
+3. I asked for a first visual pass — a logo, generated staff avatars, and
+   motion. Claude used hand-illustrated SVG icons for menu items at this
+   stage, since it didn't have real photos yet.
+4. I supplied real photography for every dish plus two venue shots.
+   Claude swapped the illustrated icons for the actual photos, added a
+   background photo treatment behind the app, and — separately, based on
+   my own read of the ordering flow — dropped the phone number field
+   from checkout since it added friction with no benefit in a no-login
+   app.
+5. I asked for the visual design to be pushed further — bolder fonts,
+   more saturated color, and backgrounds that were actually visible
+   rather than washed almost flat. Claude resaturated the palette,
+   swapped the body font, and rebuilt how the background photos stay
+   legible (frosted panels instead of a heavy wash).
+6. I asked for the "assigned" order status to be split into two distinct
+   labels — "Assigned to a waiter" versus "Order is being prepared" —
+   once I noticed the single "Being prepared" label didn't distinguish
+   between a waiter just picking up an order and a chef/bartender
+   actually starting on it. Claude computed this from whether any
+   `OrderPreparation` row was complete yet, rather than adding a new
+   stored status value, since it's fully derivable from existing state.
 
 **What I accepted:**
 - The overall architecture (single FastAPI service serving both API and
   static frontend, SQLite→Postgres via one env var).
-- The visual design direction (ivory/slate/marigold palette, Fraunces +
-  Inter type, ticket-style order cards), proposed specifically to avoid
-  the generic "AI-generated SaaS card" look.
+- The visual design direction at each stage — the ticket-style order
+  cards, the illustrated-icon system before I had real photos, and later
+  the photo-and-frosted-panel treatment — each proposed specifically to
+  avoid the generic "AI-generated SaaS card" look.
 - The three named deviations from my original model (no login, single
   restaurant/menu, derived rather than stored waiting time) — Claude
   flagged these as forced by the assignment's actual feature list rather
   than silently dropping them, and I agreed with the reasoning for each.
+- Computing the "Assigned to a waiter" / "Order is being prepared" split
+  from existing preparation data instead of adding a new stored status.
 
 **What I corrected / rejected:**
 - _[Fill this in with anything you personally changed after reviewing the
@@ -203,8 +238,12 @@ session). Pressing **Assign to me** on a new order records that waiter
 against the order (`Order.waiter_id`) and reveals a preparation checklist
 — one row per item. Each row shows a chef selector for food items or a
 bartender selector for drinks (never both), because the preparer is
-recorded per item, not once for the whole order. **Mark served** only
-appears once every row is checked off.
+recorded per item, not once for the whole order. The order's status
+label reads "Assigned to a waiter" until at least one item has an actual
+chef or bartender recorded, at which point it switches to "Order is
+being prepared" — both are derived from existing data, not a separate
+stored status. **Mark served** only appears once every row is checked
+off.
 
 **Complaint and rating.** Once an order is being prepared or later, the
 customer's ticket grows two independent, optional forms: a star rating
