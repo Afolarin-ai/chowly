@@ -118,6 +118,24 @@ function menuItemPhotoHtml(item) {
 }
 
 // ---------------------------------------------------------------------
+// Dark mode toggle
+// ---------------------------------------------------------------------
+(function initTheme() {
+  const stored = localStorage.getItem("chowly_theme");
+  if (stored === "dark") document.documentElement.dataset.theme = "dark";
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    const isDark = document.documentElement.dataset.theme === "dark";
+    if (isDark) {
+      delete document.documentElement.dataset.theme;
+      localStorage.setItem("chowly_theme", "light");
+    } else {
+      document.documentElement.dataset.theme = "dark";
+      localStorage.setItem("chowly_theme", "dark");
+    }
+  });
+})();
+
+// ---------------------------------------------------------------------
 // Role switch
 // ---------------------------------------------------------------------
 const roleSwitchEl = document.querySelector(".role-switch");
@@ -554,7 +572,7 @@ function renderWaiter() {
   const cancelled = state.waiterOrders.filter((o) => o.status === "cancelled");
 
   const listHtml = active.length
-    ? active.map((o) => waiterOrderCardHtml(o, waiters, chefs, bartenders)).join("")
+    ? `<div class="ticket-rail"></div><div class="order-list is-rail">${active.map((o) => waiterOrderCardHtml(o, waiters, chefs, bartenders, true)).join("")}</div>`
     : `<div class="empty-state"><p>All caught up</p><span>No active orders right now.</span></div>`;
 
   const settledHtml = settled.length
@@ -610,7 +628,7 @@ function renderWaiter() {
       ${statsHtml}
       ${manageMenuHtml}
     </div>
-    <div class="order-list">${listHtml}</div>
+    ${listHtml}
     ${settledHtml}
     ${cancelledHtml}
   `;
@@ -656,7 +674,7 @@ async function toggleAvailability(itemId) {
   }
 }
 
-function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
+function waiterOrderCardHtml(order, waiters, chefs, bartenders, onRail) {
   const statusLabel = {
     placed: "New \u2014 needs a waiter",
     assigned: assignedStageLabel(order),
@@ -702,6 +720,7 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders) {
 
   return `
     <div class="ticket">
+      ${onRail ? '<div class="spike-hole"></div>' : ""}
       <div class="ticket-head">
         <div class="ticket-title">Table ${order.table_number} &middot; Order #${order.id}</div>
         <div class="ticket-status status-${order.status}${statusPop}">${statusLabel}</div>
