@@ -62,7 +62,7 @@ prior engineered-model assignment, carried through unchanged: `Customer`,
 | `Menu` | restaurant_id, name, menu_type, description |
 | `MenuItem` | menu_id, item_name, item_type (food/drink), price, prep_time_minutes, availability_status |
 | `Waiter` / `Chef` / `Bartender` | restaurant_id, first_name, last_name, phone_number |
-| `Order` | customer_id, restaurant_id, waiter_id, table_number, status, order_time, actual_completion_time |
+| `Order` | customer_id, restaurant_id, waiter_id, table_number, status (placed/assigned/served/paid/cancelled), order_time, actual_completion_time |
 | `OrderItem` | order_id, menu_item_id, quantity, unit_price |
 | `OrderPreparation` | order_id, order_item_id, menu_item_id, chef_id, bartender_id, status, preparation_start/end_time |
 | `Complaint` | order_id, customer_id, description, complaint_date, status |
@@ -132,7 +132,7 @@ checked off, a ticket glowing once when paid) — not hover animations on
 every card, which reads as generic rather than intentional.
 
 ### Deployment
-See [Section 5](#5-how-to-deploy-it-yourself) below for the exact steps —
+See [Section 6](#6-how-to-deploy-it-yourself) below for the exact steps —
 I can't create accounts or click through a deploy on your behalf, so
 this is written as a walkthrough for you to run.
 
@@ -182,6 +182,16 @@ of scaffolding.
    actually starting on it. Claude computed this from whether any
    `OrderPreparation` row was complete yet, rather than adding a new
    stored status value, since it's fully derivable from existing state.
+7. Given the assignment's bonus prompt, I asked what was worth adding
+   beyond the requirements. Claude proposed five options with a rough
+   sense of effort for each; I picked all five (cancel an order, 86 an
+   item, a small stats panel, table QR codes, printable tickets) rather
+   than one or two. While testing that batch, Claude found and fixed a
+   real bug on its own — the cart bar stayed stuck visible after
+   switching from Customer to Waiter with items still in the cart — by
+   checking the actual DOM state directly rather than assuming a
+   screenshot showing it was just a rendering artifact (which is what an
+   earlier, similar-looking screenshot had turned out to be).
 
 **What I accepted:**
 - The overall architecture (single FastAPI service serving both API and
@@ -196,12 +206,29 @@ of scaffolding.
   than silently dropping them, and I agreed with the reasoning for each.
 - Computing the "Assigned to a waiter" / "Order is being prepared" split
   from existing preparation data instead of adding a new stored status.
+- All five proposed bonus features, and the same eligibility rule
+  (nothing prepared yet) being reused for both Cancel and — when I asked
+  about it — the not-yet-built Edit feature, rather than inventing a
+  second rule for a very similar situation.
 
 **What I corrected / rejected:**
-- _[Fill this in with anything you personally changed after reviewing the
-  code — e.g. menu items, copy, a design tweak, a business rule you
-  wanted different. Be specific; this section should reflect your actual
-  review, not Claude's.]_
+- Rejected the first data model outright — even though it worked, it
+  wasn't the one I'd actually designed and been graded on, so I had it
+  fully restructured to match my original document rather than accept
+  the shortcut version.
+- Rejected phone number as a required field once I saw it sitting in
+  the actual checkout flow — it added friction for no real benefit in
+  an app with no login, so I had it dropped and made properly optional
+  on the backend, not just hidden in the UI.
+- Pushed back on the single "Being prepared" status label as
+  ambiguous — a waiter picking up an order and a chef actually starting
+  to cook are two different moments, and I wanted the label to say
+  which one had actually happened.
+- Rejected the first visual pass as too safe — illustrated icons, a
+  muted palette, background photos washed almost to invisibility. Asked
+  for real dish photography, then a second time for bolder fonts, more
+  saturated color, and backgrounds that were actually visible rather
+  than decorative.
 
 **What I verified myself, rather than taking on faith:**
 - Every screen and the full order lifecycle (place → assign → per-item
@@ -209,11 +236,25 @@ of scaffolding.
   clicking through the running app — not just reading the code — both
   before and after the model reconciliation, since the rewrite touched
   every layer of the stack.
-- _[Add anything else you personally re-checked before submitting.]_
+- Walked through the actual Neon database setup and Render deployment
+  myself rather than taking the instructions on faith — along the way I
+  caught that my extracted project was missing its `.git` folder (my
+  file manager was just hiding dotfiles, not a real bug) and confirmed
+  the fix before moving on.
+- Noticed independently that the README had gone stale after a run of
+  feature commits, by checking it against the actual commit history
+  rather than assuming it was current.
+- Flagged things that looked off during my own use of the app — an
+  apparent missing waiting-time display, and a report of orders looking
+  duplicated on the customer page — rather than assuming everything was
+  fine. The first turned out to be a screenshot-tool artifact, confirmed
+  against the live DOM state, not a real bug; the second I chose to
+  deprioritize rather than chase down immediately, and it's noted as an
+  open item in the Bonus section above instead of being quietly dropped.
 
 ---
 
-## 3. Application behaviour
+## 3. The specific behaviour of the application
 
 **Menu browsing.** A customer opens the app and lands on the Customer tab
 by default. Food and drinks are shown in separate sections, each item
@@ -266,7 +307,58 @@ re-fetches the full current order list from the server on every load.
 
 ---
 
-## 4. How to use it (walkthrough)
+## 4. Bonus — beyond the requirements
+
+The assignment calls out bonus points for anything built beyond the core
+requirements. Everything below is additional; none of it is needed for
+the required story to work.
+
+**Cancel an order.** A customer can cancel from their ticket while it's
+still genuinely just sitting in the queue — either nobody's picked it up
+yet (`placed`), or a waiter has but no chef/bartender has actually
+started on any item (`assigned` with every `OrderPreparation` still
+pending). The instant real prep work begins on even one item, the Cancel
+button disappears — cancelling at that point would mean wasting food
+already being made. The backend enforces the same rule independently
+(rejects with a 400 if called too late), so this isn't just a hidden UI
+button.
+
+**86 an item.** A waiter can mark any menu item sold out from a small
+"Menu availability" panel on the Floor screen. This flips
+`MenuItem.availability_status`, which already existed in the original
+data model but wasn't wired to anything until now. A sold-out item
+disappears from the customer's menu within one polling cycle (the app
+already refreshes every few seconds) — no page reload needed.
+
+**Today's numbers.** The waiter dashboard shows a small live panel:
+revenue today, order count, the top-selling item, and the average
+rating — all computed from data the app already has (`Payment`,
+`OrderItem`, `Rating`), scoped to the current date.
+
+**Table QR codes.** Every table gets a generated QR code
+(`/api/qr/{table_number}`) encoding a link straight back to the ordering
+page with that table pre-filled, plus a printable sheet of them
+(`/qr?count=N`) for however many tables the restaurant has — print it,
+cut it up, one card per table.
+
+**Printable kitchen ticket / receipt.** Every order ticket, on both the
+customer and waiter side, has a Print button. It builds a clean,
+minimal, monospace ticket in a hidden print-only area and triggers the
+browser's print dialog — labelled "KITCHEN TICKET" for an unpaid order
+or "RECEIPT" once it's paid, matching what a restaurant would actually
+want to hand someone or stick on a rail.
+
+**Known gaps, honestly.** Editing an order's items before prep starts
+(same eligibility rule as cancel) was discussed and scoped — roughly a
+30–45 minute build — but hasn't been built yet as of this document. A
+report of orders appearing duplicated on the customer page was also
+raised during development; it wasn't investigated further because it
+didn't reproduce as a blocking issue and was deprioritized, so it's
+listed here rather than silently left out.
+
+---
+
+## 5. How to use it (walkthrough)
 
 1. Open the live link. You land on the **Customer** view.
 2. Enter your name and a table number (any number — there's no real
@@ -287,10 +379,22 @@ re-fetches the full current order list from the server on every load.
     Use either, both, or neither.
 11. Pressing **Pay (pretend)** marks the order paid and moves it out of
     the waiter's active list into **Settled tonight**.
+12. Any ticket has a **Print** button (kitchen ticket before payment,
+    receipt after) that opens your browser's print dialog with a clean,
+    minimal version of the ticket.
+13. While an order is still just placed, or assigned but untouched, its
+    ticket also shows a **Cancel order** button — try it, then try
+    placing a fresh order and letting a waiter start prep before
+    checking again; the button is gone once prep has begun.
+14. On the Floor screen, waiters can mark a dish sold out under **Menu
+    availability** (it disappears from the customer menu within a few
+    seconds), see **today's revenue/orders/top-seller/rating**, and open
+    a **printable sheet of table QR codes** — each one deep-links back
+    to the ordering page with that table pre-filled.
 
 ---
 
-## 5. How to deploy it yourself
+## 6. How to deploy it yourself
 
 You'll need a free [GitHub](https://github.com) account (you already have
 one), a free [Neon](https://neon.tech) account for Postgres, and a free
