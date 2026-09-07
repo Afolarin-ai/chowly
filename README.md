@@ -5,8 +5,8 @@ their table, waiters pick up orders and record which chef or bartender
 prepared each item, and every order carries its own waiting time, rating,
 complaint, and payment record.
 
-**Live app:** _add your Render URL here once deployed_
-**Repo:** _add your GitHub URL here_
+**Live app:** https://chowly-9hem.onrender.com/
+**Repo:** https://github.com/Afolarin-ai/chowly
 
 ---
 
