@@ -3,3 +3,5 @@ uvicorn[standard]==0.52.4
 sqlalchemy==2.0.52
 pydantic==2.13.5
 psycopg2-binary==2.9.12
+qrcode==8.2
+pillow==12.1.1

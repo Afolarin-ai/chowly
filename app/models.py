@@ -15,11 +15,17 @@ class ItemType(str, enum.Enum):
     drink = "drink"
 
 
+class AvailabilityStatus(str, enum.Enum):
+    available = "available"
+    sold_out = "sold_out"
+
+
 class OrderStatus(str, enum.Enum):
     placed = "placed"          # customer submitted, no waiter assigned yet
     assigned = "assigned"      # a waiter has picked it up
     served = "served"          # every item prepared, waiter marked it served
     paid = "paid"              # payment recorded
+    cancelled = "cancelled"    # customer cancelled before prep started
 
 
 class PreparationStatus(str, enum.Enum):
@@ -77,7 +83,7 @@ class MenuItem(Base):
     description = Column(String)
     price = Column(Float, nullable=False)
     prep_time_minutes = Column(Integer, nullable=False)
-    availability_status = Column(String, default="available")
+    availability_status = Column(String, nullable=False, default=AvailabilityStatus.available.value)
 
     menu = relationship("Menu", back_populates="items")
     order_items = relationship("OrderItem", back_populates="menu_item")
