@@ -98,13 +98,17 @@ def stats_today(db: Session = Depends(get_db)):
         .scalar()
     )
 
-    orders_today = db.query(func.count(models.Order.id)).filter(models.Order.order_date == today).scalar()
+    orders_today = (
+        db.query(func.count(models.Order.id))
+        .filter(models.Order.order_date == today, models.Order.status != models.OrderStatus.cancelled)
+        .scalar()
+    )
 
     top_item_row = (
         db.query(models.MenuItem.item_name, func.sum(models.OrderItem.quantity).label("qty"))
         .join(models.OrderItem, models.OrderItem.menu_item_id == models.MenuItem.id)
         .join(models.Order, models.OrderItem.order_id == models.Order.id)
-        .filter(models.Order.order_date == today)
+        .filter(models.Order.order_date == today, models.Order.status != models.OrderStatus.cancelled)
         .group_by(models.MenuItem.item_name)
         .order_by(func.sum(models.OrderItem.quantity).desc())
         .first()
