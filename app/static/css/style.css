@@ -336,21 +336,31 @@ button:active { transform: translateY(1px); }
 
 /* ---------- Menu grid ---------- */
 .menu-category {
-  margin-bottom: 32px;
+  margin-bottom: 44px;
 }
 
 .menu-category h3 {
   font-family: var(--serif);
   font-style: italic;
-  font-weight: 600;
-  font-size: 21px;
-  margin: 0 0 14px;
-  padding-bottom: 8px;
-  border-bottom: 2px solid var(--marigold);
-  display: inline-block;
+  font-weight: 700;
+  font-size: 34px;
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
 }
 
-.menu-category h3.cat-drink { border-bottom-color: var(--teal); }
+.menu-category h3::after {
+  content: "";
+  flex: 1;
+  height: 2px;
+  background: var(--marigold);
+  opacity: 0.45;
+  transform: translateY(-8px);
+}
+
+.menu-category h3.cat-drink::after { background: var(--teal); }
 
 .menu-grid {
   display: grid;

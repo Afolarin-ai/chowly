@@ -16,6 +16,7 @@ const state = {
   justSettledOrderIds: new Set(),    // order_id -> plays the "just paid" glow once
   todayStats: null,
   drafts: {},   // orderId -> { rating, comment, complaint } — survives background re-renders
+  prepDrafts: {}, // orderItemId -> selected staff id — survives background re-renders
 };
 
 const app = document.getElementById("app");
@@ -667,6 +668,11 @@ function renderWaiter() {
   app.querySelectorAll("[data-assign-order]").forEach((btn) => {
     btn.addEventListener("click", () => assignOrder(Number(btn.dataset.assignOrder)));
   });
+  app.querySelectorAll("[data-preparer-select]").forEach((select) => {
+    select.addEventListener("change", (e) => {
+      state.prepDrafts[Number(select.dataset.preparerSelect)] = e.target.value;
+    });
+  });
   app.querySelectorAll("[data-prepare-item]").forEach((btn) => {
     btn.addEventListener("click", () => recordPreparation(Number(btn.dataset.orderId), Number(btn.dataset.prepareItem)));
   });
@@ -773,6 +779,7 @@ function preparationRowHtml(orderId, prep, chefs, bartenders) {
   const isFood = prep.menu_item.item_type === "food";
   const options = isFood ? chefs : bartenders;
   const roleLabel = isFood ? "chef" : "bartender";
+  const draftValue = state.prepDrafts[prep.order_item_id] || "";
 
   return `
     <div class="prep-row">
@@ -780,7 +787,7 @@ function preparationRowHtml(orderId, prep, chefs, bartenders) {
       <div class="prep-controls">
         <select data-preparer-select="${prep.order_item_id}">
           <option value="">${roleLabel}\u2026</option>
-          ${options.map((o) => `<option value="${o.id}">${o.first_name} ${o.last_name}</option>`).join("")}
+          ${options.map((o) => `<option value="${o.id}"${String(o.id) === draftValue ? " selected" : ""}>${o.first_name} ${o.last_name}</option>`).join("")}
         </select>
         <button class="btn-secondary" data-prepare-item="${prep.order_item_id}" data-order-id="${orderId}" data-item-type="${prep.menu_item.item_type}">Record</button>
       </div>
@@ -820,6 +827,7 @@ async function recordPreparation(orderId, orderItemId) {
       body: JSON.stringify(payload),
     });
     applyOrderUpdate(updated);
+    delete state.prepDrafts[orderItemId];
     state.justCompletedPrepIds.add(orderItemId);
     renderWaiter();
     setTimeout(() => state.justCompletedPrepIds.delete(orderItemId), 600);
@@ -873,7 +881,7 @@ async function init() {
   await render(true);
   setInterval(() => {
     const active = document.activeElement;
-    const isTyping = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
+    const isTyping = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT" || active.tagName === "SELECT");
     if (document.visibilityState === "visible" && !isTyping) render(false);
   }, 6000);
 }
