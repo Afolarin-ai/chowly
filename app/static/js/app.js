@@ -17,6 +17,8 @@ const state = {
   todayStats: null,
   drafts: {},   // orderId -> { rating, comment, complaint } — survives background re-renders
   prepDrafts: {}, // orderItemId -> selected staff id — survives background re-renders
+  tipPickerOpen: new Set(),  // order ids currently showing the tip picker
+  tipDrafts: {},             // orderId -> { tipAmount, customMode }
 };
 
 const app = document.getElementById("app");
@@ -234,9 +236,7 @@ function renderCustomer(animateEntrance) {
 
   app.querySelectorAll("[data-complaint-form]").forEach(wireComplaintForm);
   app.querySelectorAll("[data-rating-form]").forEach(wireRatingForm);
-  app.querySelectorAll("[data-pay-order]").forEach((btn) => {
-    btn.addEventListener("click", () => payOrder(Number(btn.dataset.payOrder)));
-  });
+  wireTipPicker();
   app.querySelectorAll("[data-cancel-order]").forEach((btn) => {
     btn.addEventListener("click", () => cancelOrder(Number(btn.dataset.cancelOrder)));
   });
@@ -361,17 +361,17 @@ function orderTicketHtml(order) {
     ? complaintFormHtml(order.id)
     : "";
 
-  const payAction =
-    !order.payment && order.status === "served"
-      ? `<button class="btn-primary" data-pay-order="${order.id}">Pay (pretend)</button>`
-      : "";
+  const payAction = payActionHtml(order);
 
   const cancelAction = isCancellable(order)
     ? `<button class="btn-cancel" data-cancel-order="${order.id}">Cancel order</button>`
     : "";
 
   const paymentNote = order.payment
-    ? `<div class="ticket-meta"><span>Paid \u2713 ref ${order.payment.transaction_reference}</span></div>`
+    ? `<div class="ticket-meta">
+        <span>Paid \u2713 ref ${order.payment.transaction_reference}</span>
+        ${order.payment.tip_amount > 0 ? `<span>Tip: ${money(order.payment.tip_amount)}</span>` : ""}
+      </div>`
     : "";
 
   const statusPop = state.justSettledOrderIds.has(order.id) ? " just-settled" : "";
@@ -406,6 +406,101 @@ function isCancellable(order) {
   if (order.status === "placed") return true;
   if (order.status !== "assigned") return false;
   return !order.preparations.some((p) => p.status === "completed");
+}
+
+// ---------------------------------------------------------------------
+// Tip picker — shared between the customer ticket and the waiter card,
+// since either side can record payment.
+// ---------------------------------------------------------------------
+function getTipDraft(orderId) {
+  if (!state.tipDrafts[orderId]) state.tipDrafts[orderId] = { tipAmount: 0, customMode: false };
+  return state.tipDrafts[orderId];
+}
+
+function tipPickerHtml(order) {
+  const draft = getTipDraft(order.id);
+  const subtotal = order.total_amount;
+  const presetPercents = [0, 0.10, 0.15, 0.20];
+  const presetLabels = ["No tip", "10%", "15%", "20%"];
+  const presetValues = presetPercents.map((p) => Math.round(subtotal * p));
+
+  return `
+    <div class="tip-picker" data-tip-picker="${order.id}" data-subtotal="${subtotal}">
+      <label>Add a tip before paying?</label>
+      <div class="tip-options">
+        ${presetValues.map((v, i) => `<button type="button" class="tip-btn${!draft.customMode && draft.tipAmount === v ? " is-active" : ""}" data-tip-preset="${v}">${presetLabels[i]}</button>`).join("")}
+        <button type="button" class="tip-btn${draft.customMode ? " is-active" : ""}" data-tip-custom-toggle>Custom</button>
+      </div>
+      ${draft.customMode ? `<input type="number" min="0" step="1" class="tip-custom-input" data-tip-custom-input value="${draft.tipAmount || ""}" placeholder="Enter amount">` : ""}
+      <div class="ticket-actions">
+        <button class="btn-primary" data-confirm-payment="${order.id}">Pay ${money(subtotal + (draft.tipAmount || 0))}</button>
+        <button class="btn-secondary" data-cancel-tip="${order.id}">Cancel</button>
+      </div>
+    </div>`;
+}
+
+// Either "Pay (pretend)" (closed) or the tip picker itself (open) —
+// identical logic on both the customer ticket and the waiter card.
+function payActionHtml(order) {
+  if (order.payment || order.status !== "served") return "";
+  if (state.tipPickerOpen.has(order.id)) return tipPickerHtml(order);
+  return `<button class="btn-primary" data-open-tip-picker="${order.id}">Pay (pretend)</button>`;
+}
+
+// Shared between renderCustomer and renderWaiter — either side can open
+// the tip picker and confirm payment.
+function wireTipPicker() {
+  app.querySelectorAll("[data-open-tip-picker]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.tipPickerOpen.add(Number(btn.dataset.openTipPicker));
+      render(false);
+    });
+  });
+  app.querySelectorAll("[data-tip-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const orderId = Number(btn.closest("[data-tip-picker]").dataset.tipPicker);
+      const draft = getTipDraft(orderId);
+      draft.tipAmount = Number(btn.dataset.tipPreset);
+      draft.customMode = false;
+      render(false);
+    });
+  });
+  app.querySelectorAll("[data-tip-custom-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const orderId = Number(btn.closest("[data-tip-picker]").dataset.tipPicker);
+      getTipDraft(orderId).customMode = true;
+      render(false);
+    });
+  });
+  app.querySelectorAll("[data-tip-custom-input]").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const box = input.closest("[data-tip-picker]");
+      const orderId = Number(box.dataset.tipPicker);
+      const subtotal = Number(box.dataset.subtotal);
+      const draft = getTipDraft(orderId);
+      draft.tipAmount = Number(e.target.value) || 0;
+      // Update just the confirm button's total live, without a full
+      // re-render — re-rendering here would destroy and recreate this
+      // very input, kicking focus out after every keystroke.
+      const confirmBtn = box.querySelector("[data-confirm-payment]");
+      if (confirmBtn) confirmBtn.textContent = `Pay ${money(subtotal + draft.tipAmount)}`;
+    });
+  });
+  app.querySelectorAll("[data-cancel-tip]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const orderId = Number(btn.dataset.cancelTip);
+      state.tipPickerOpen.delete(orderId);
+      delete state.tipDrafts[orderId];
+      render(false);
+    });
+  });
+  app.querySelectorAll("[data-confirm-payment]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const orderId = Number(btn.dataset.confirmPayment);
+      const draft = getTipDraft(orderId);
+      payOrder(orderId, draft.tipAmount || 0);
+    });
+  });
 }
 
 function ratingFormHtml(orderId) {
@@ -504,11 +599,20 @@ function wireComplaintForm(box) {
   });
 }
 
-async function payOrder(orderId) {
+async function payOrder(orderId, tipAmount = 0) {
   try {
-    const updated = await api(`/orders/${orderId}/pay`, { method: "POST" });
+    const updated = await api(`/orders/${orderId}/pay`, {
+      method: "POST",
+      body: JSON.stringify({ tip_amount: tipAmount }),
+    });
     applyOrderUpdate(updated);
-    showToast("Payment recorded (pretend) \u2014 see you again soon");
+    state.tipPickerOpen.delete(orderId);
+    delete state.tipDrafts[orderId];
+    showToast(
+      tipAmount > 0
+        ? `Payment recorded with a ${money(tipAmount)} tip \u2014 thank you!`
+        : "Payment recorded (pretend) \u2014 see you again soon"
+    );
     state.justSettledOrderIds.add(orderId);
     render(false);
     setTimeout(() => state.justSettledOrderIds.delete(orderId), 1300);
@@ -556,7 +660,11 @@ function printOrder(orderId) {
         ${order.waiter ? ` &middot; Waiter: ${order.waiter.first_name} ${order.waiter.last_name}` : ""}
       </div>
       <table>${rows}</table>
-      <div class="print-total">Total: ${money(order.total_amount)}</div>
+      ${isReceipt && order.payment.tip_amount > 0 ? `
+      <div class="print-total" style="font-weight:normal">Subtotal: ${money(order.total_amount)}</div>
+      <div class="print-total" style="font-weight:normal">Tip: ${money(order.payment.tip_amount)}</div>
+      <div class="print-total">Total paid: ${money(order.payment.amount)}</div>
+      ` : `<div class="print-total">Total: ${money(order.total_amount)}</div>`}
       ${isReceipt ? `<div class="print-meta">Paid (pretend) &middot; ref ${order.payment.transaction_reference}</div>` : ""}
     </div>`;
 
@@ -616,6 +724,7 @@ function renderWaiter() {
   const statsHtml = s
     ? `<div class="stats-grid">
         <div class="stat-card"><div class="stat-value">${money(s.revenue_today)}</div><div class="stat-label">Revenue today</div></div>
+        <div class="stat-card"><div class="stat-value">${money(s.tips_today)}</div><div class="stat-label">Tips today</div></div>
         <div class="stat-card"><div class="stat-value">${s.orders_today}</div><div class="stat-label">Orders today</div></div>
         <div class="stat-card"><div class="stat-value">${s.top_item ? escapeHtml(s.top_item) : "\u2014"}</div><div class="stat-label">${s.top_item ? `Top seller \u00b7 ${s.top_item_quantity} sold` : "Top seller"}</div></div>
         <div class="stat-card"><div class="stat-value">${s.average_rating !== null ? `${s.average_rating}/5` : "\u2014"}</div><div class="stat-label">Avg rating today</div></div>
@@ -679,9 +788,7 @@ function renderWaiter() {
   app.querySelectorAll("[data-serve-order]").forEach((btn) => {
     btn.addEventListener("click", () => serveOrder(Number(btn.dataset.serveOrder)));
   });
-  app.querySelectorAll("[data-pay-order]").forEach((btn) => {
-    btn.addEventListener("click", () => payOrder(Number(btn.dataset.payOrder)));
-  });
+  wireTipPicker();
   app.querySelectorAll("[data-print-order]").forEach((btn) => {
     btn.addEventListener("click", () => printOrder(Number(btn.dataset.printOrder)));
   });
@@ -734,7 +841,7 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders, onRail) {
       actionHtml += `<div class="ticket-actions"><button class="btn-primary" data-serve-order="${order.id}">Mark served</button></div>`;
     }
   } else if (order.status === "served") {
-    actionHtml = `<div class="ticket-actions"><button class="btn-primary" data-pay-order="${order.id}">Record payment (pretend)</button></div>`;
+    actionHtml = `<div class="ticket-actions">${payActionHtml(order)}</div>`;
   }
 
   const statusPop = state.justSettledOrderIds.has(order.id) ? " just-settled" : "";
@@ -757,6 +864,7 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders, onRail) {
         <span>Waiting time: ~${order.estimated_waiting_time_minutes} min</span>
         ${order.waiter ? `<span class="avatar-tag">${avatarHtml(order.waiter.first_name, order.waiter.last_name, "sm")} ${order.waiter.first_name} ${order.waiter.last_name}</span>` : ""}
       </div>
+      ${order.payment && order.payment.tip_amount > 0 ? `<div class="ticket-meta"><span>Tip: ${money(order.payment.tip_amount)}</span></div>` : ""}
       ${complaintHtml}
       ${ratingHtml}
       ${actionHtml}

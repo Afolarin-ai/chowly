@@ -261,7 +261,8 @@ class Payment(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, unique=True)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
-    amount = Column(Float, nullable=False)
+    amount = Column(Float, nullable=False)          # subtotal + tip — what was actually charged
+    tip_amount = Column(Float, nullable=False, default=0.0)
     payment_method = Column(String, default="Simulated (pretend) payment")
     payment_time = Column(DateTime, default=datetime.utcnow)
     status = Column(Enum(PaymentStatus), nullable=False, default=PaymentStatus.successful)

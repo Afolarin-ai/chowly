@@ -91,8 +91,11 @@ def stats_today(db: Session = Depends(get_db)):
     on data the app already has, purely as a bonus."""
     today = date.today()
 
+    # Revenue is food/drink sales only — tips are a pass-through to staff,
+    # not restaurant revenue, so they're subtracted back out here even
+    # though they're part of what was actually charged (Payment.amount).
     revenue_today = (
-        db.query(func.coalesce(func.sum(models.Payment.amount), 0.0))
+        db.query(func.coalesce(func.sum(models.Payment.amount - models.Payment.tip_amount), 0.0))
         .join(models.Order, models.Payment.order_id == models.Order.id)
         .filter(models.Order.order_date == today)
         .scalar()
@@ -121,8 +124,16 @@ def stats_today(db: Session = Depends(get_db)):
         .scalar()
     )
 
+    tips_today = (
+        db.query(func.coalesce(func.sum(models.Payment.tip_amount), 0.0))
+        .join(models.Order, models.Payment.order_id == models.Order.id)
+        .filter(models.Order.order_date == today)
+        .scalar()
+    )
+
     return {
         "revenue_today": float(revenue_today or 0),
+        "tips_today": float(tips_today or 0),
         "orders_today": orders_today or 0,
         "top_item": top_item_row[0] if top_item_row else None,
         "top_item_quantity": int(top_item_row[1]) if top_item_row else 0,
@@ -291,7 +302,7 @@ def cancel_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/api/orders/{order_id}/pay", response_model=schemas.OrderOut)
-def pay_order(order_id: int, db: Session = Depends(get_db)):
+def pay_order(order_id: int, payload: schemas.PayRequest = schemas.PayRequest(), db: Session = Depends(get_db)):
     order = db.query(models.Order).get(order_id)
     if not order:
         raise HTTPException(404, "Order not found")
@@ -301,7 +312,8 @@ def pay_order(order_id: int, db: Session = Depends(get_db)):
     db.add(models.Payment(
         order_id=order.id,
         customer_id=order.customer_id,
-        amount=order.total_amount,
+        amount=order.total_amount + payload.tip_amount,
+        tip_amount=payload.tip_amount,
     ))
     order.status = models.OrderStatus.paid
     db.commit()
