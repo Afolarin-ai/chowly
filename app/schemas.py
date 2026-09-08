@@ -122,7 +122,6 @@ class RatingOut(BaseModel):
 class PaymentOut(BaseModel):
     id: int
     amount: float
-    tip_amount: float
     payment_method: str
     payment_time: datetime
     status: str
@@ -158,10 +157,6 @@ class AssignWaiter(BaseModel):
 class AssignPreparer(BaseModel):
     chef_id: Optional[int] = None
     bartender_id: Optional[int] = None
-
-
-class PayRequest(BaseModel):
-    tip_amount: float = Field(default=0.0, ge=0)
 
 
 class ComplaintCreate(BaseModel):
