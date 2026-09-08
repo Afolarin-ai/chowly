@@ -15,6 +15,7 @@ const state = {
   justCompletedPrepIds: new Set(),   // order_item_id -> plays the "just recorded" pop once
   justSettledOrderIds: new Set(),    // order_id -> plays the "just paid" glow once
   todayStats: null,
+  drafts: {},   // orderId -> { rating, comment, complaint } — survives background re-renders
 };
 
 const app = document.getElementById("app");
@@ -407,13 +408,15 @@ function isCancellable(order) {
 }
 
 function ratingFormHtml(orderId) {
+  const draft = state.drafts[orderId] || {};
+  const rating = draft.rating || 0;
   return `
     <div class="complaint-box" data-rating-form data-order-id="${orderId}">
       <label>Rate this order</label>
       <div class="rating-picker" data-rating-picker>
-        ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rating-star" data-star="${n}">&#9733;</button>`).join("")}
+        ${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="rating-star${n <= rating ? " is-active" : ""}" data-star="${n}">&#9733;</button>`).join("")}
       </div>
-      <textarea data-rating-comment placeholder="Optional comment"></textarea>
+      <textarea data-rating-comment placeholder="Optional comment">${escapeHtml(draft.comment || "")}</textarea>
       <div class="ticket-actions">
         <button class="btn-secondary" data-submit-rating>Submit rating</button>
       </div>
@@ -421,39 +424,49 @@ function ratingFormHtml(orderId) {
 }
 
 function complaintFormHtml(orderId) {
+  const draft = state.drafts[orderId] || {};
   return `
     <div class="complaint-box" data-complaint-form data-order-id="${orderId}">
       <label>Something wrong with this order? Let the kitchen know.</label>
-      <textarea data-complaint-message placeholder="What happened?"></textarea>
+      <textarea data-complaint-message placeholder="What happened?">${escapeHtml(draft.complaint || "")}</textarea>
       <div class="ticket-actions">
         <button class="btn-secondary" data-submit-complaint>Submit complaint</button>
       </div>
     </div>`;
 }
 
+function getDraft(orderId) {
+  if (!state.drafts[orderId]) state.drafts[orderId] = {};
+  return state.drafts[orderId];
+}
+
 function wireRatingForm(box) {
-  let rating = 0;
+  const orderId = Number(box.dataset.orderId);
+  const draft = getDraft(orderId);
   const stars = box.querySelectorAll("[data-star]");
   stars.forEach((star) => {
     star.addEventListener("click", () => {
-      rating = Number(star.dataset.star);
-      stars.forEach((s) => s.classList.toggle("is-active", Number(s.dataset.star) <= rating));
+      draft.rating = Number(star.dataset.star);
+      stars.forEach((s) => s.classList.toggle("is-active", Number(s.dataset.star) <= draft.rating));
     });
+  });
+  box.querySelector("[data-rating-comment]").addEventListener("input", (e) => {
+    draft.comment = e.target.value;
   });
 
   box.querySelector("[data-submit-rating]").addEventListener("click", async () => {
-    if (!rating) {
+    if (!draft.rating) {
       showToast("Pick a star rating first");
       return;
     }
-    const comment = box.querySelector("[data-rating-comment]").value.trim();
-    const orderId = Number(box.dataset.orderId);
+    const comment = (draft.comment || "").trim();
     try {
       const updated = await api(`/orders/${orderId}/rating`, {
         method: "POST",
-        body: JSON.stringify({ rating_value: rating, comment: comment || null }),
+        body: JSON.stringify({ rating_value: draft.rating, comment: comment || null }),
       });
       applyOrderUpdate(updated);
+      delete state.drafts[orderId];
       showToast("Thanks for rating your order");
       render(false);
     } catch (err) {
@@ -463,19 +476,25 @@ function wireRatingForm(box) {
 }
 
 function wireComplaintForm(box) {
+  const orderId = Number(box.dataset.orderId);
+  const draft = getDraft(orderId);
+  box.querySelector("[data-complaint-message]").addEventListener("input", (e) => {
+    draft.complaint = e.target.value;
+  });
+
   box.querySelector("[data-submit-complaint]").addEventListener("click", async () => {
-    const description = box.querySelector("[data-complaint-message]").value.trim();
+    const description = (draft.complaint || "").trim();
     if (!description) {
       showToast("Add a message first");
       return;
     }
-    const orderId = Number(box.dataset.orderId);
     try {
       const updated = await api(`/orders/${orderId}/complaint`, {
         method: "POST",
         body: JSON.stringify({ description }),
       });
       applyOrderUpdate(updated);
+      delete state.drafts[orderId];
       showToast("Complaint sent \u2014 thanks for letting us know");
       render(false);
     } catch (err) {
@@ -853,7 +872,9 @@ async function init() {
   state.staff = await api("/staff");
   await render(true);
   setInterval(() => {
-    if (document.visibilityState === "visible") render(false);
+    const active = document.activeElement;
+    const isTyping = active && (active.tagName === "TEXTAREA" || active.tagName === "INPUT");
+    if (document.visibilityState === "visible" && !isTyping) render(false);
   }, 6000);
 }
 
