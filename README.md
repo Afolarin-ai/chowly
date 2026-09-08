@@ -402,17 +402,28 @@ design itself was called out as something worth investing in.
 Requires a free GitHub account, a free Neon account for Postgres, and a
 free Render account for hosting. No card is needed for either.
 
-1. Push the repository to GitHub (`git remote add origin`,
-   `git push -u origin main`).
-2. Create a Neon Postgres database and copy its connection string
-   (starts with `postgres://` or `postgresql://`).
-3. On Render: New → Blueprint → connect the GitHub repo. Render reads
-   `render.yaml` automatically and proposes a web service called
-   chowly. Paste the Neon connection string as the `DATABASE_URL`
-   environment variable, then deploy.
-4. Visit the URL Render provides. The first request creates the
-   database tables and seeds the restaurant, menu, and staff
-   automatically (see `app/seed.py`) — nothing else to run by hand.
+1. **Push this repo to GitHub.**
+   ```bash
+   cd chowly
+   git remote add origin https://github.com/Afolarin-ai/chowly.git
+   git branch -M main
+   git push -u origin main
+   ```
+2. **Create a Neon Postgres database.** Sign up at neon.tech, create a
+   project, and copy the connection string it gives you (starts with
+   `postgres://` or `postgresql://`).
+3. **Deploy to Render.**
+   - New → Blueprint → connect your GitHub repo. Render will read
+     `render.yaml` automatically and propose a web service called `chowly`.
+   - When prompted for the `DATABASE_URL` environment variable, paste the
+     Neon connection string from step 2.
+   - Deploy. Render installs `requirements.txt` and starts the app with
+     `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
+4. **Visit the URL Render gives you.** The first request creates the
+   tables and seeds the restaurant/menu/staff automatically (see
+   `app/seed.py`) — nothing else to run by hand.
+5. Update the **Live app** and **Repo** links at the top of this document,
+   commit, and push.
 
 If Render's free tier spins the service down after inactivity, the
 first request after a while will just be slow (10–30 seconds) while it
