@@ -7,6 +7,7 @@ complaint, and payment record.
 
 **Live app:** https://chowly-9hem.onrender.com/
 **Repository:** https://github.com/Afolarin-ai/chowly
+**Data Engineering Lab 1 (gap analysis + updated app):** [docs/LAB1_GAP_ANALYSIS.md](docs/LAB1_GAP_ANALYSIS.md)
 
 ---
 
@@ -429,3 +430,29 @@ If Render's free tier spins the service down after inactivity, the
 first request after a while will just be slow (10–30 seconds) while it
 wakes up — that's normal for a free-tier deploy and not a bug in the
 app.
+
+---
+
+## 7. Data Engineering Lab 1: Gaps Closed
+
+The Chowly BRD asks business questions this app couldn't answer. The full
+gap table (BRD need, what existed, what was added) is in
+[docs/LAB1_GAP_ANALYSIS.md](docs/LAB1_GAP_ANALYSIS.md). In short:
+
+- **Three locations** (Lekki Phase 1, Ikeja GRA, Wuse 2), each with an official code.
+- **History is kept, not overwritten:**
+  - every order status change, with its time and who made it
+  - every menu price, name and availability change
+  - the waiting time promised when the order was placed
+- **Better capture:**
+  - cancellation reasons
+  - complaint categories and dishes, plus complaint resolution
+  - payment method
+  - phone numbers stored in one format, with duplicate customers merged and the merge recorded
+- **Payments can't be edited**, because a database trigger blocks it. Refunds are new rows.
+- **Partner data import** (Office tab): CSV or Excel files from the delivery
+  platform, suppliers and the card acquirer. Bad rows are quarantined with a
+  reason, and re-uploads never duplicate data.
+- **Safe upgrade:** `app/migrate.py` only adds things and runs on startup, so
+  the live database upgrades itself on deploy with no downtime.
+

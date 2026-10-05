@@ -1,0 +1,4 @@
+platform_order_ref,chowly_order_id,location_code,order_date,gross_amount,commission_amount,net_amount,settlement_date,settlement_ref
+DP-88250,,WUS,2026-10-02,11400,1710,9690,2026-10-03,STL-2026-10-03
+DP-88301,,LEK,2026-10-03,7200,1080,6120,2026-10-04,STL-2026-10-04
+DP-88305,,IKJ,2026-10-03,13650,2047.5,11602.5,2026-10-04,STL-2026-10-04

@@ -1,0 +1,6 @@
+transaction_reference,transaction_type,transaction_date,settlement_date,gross_amount,fee_amount,net_amount,chowly_order_id,location_code
+TXN-550193,sale,2026-10-01,2026-10-02,9000,135,8865,,IKJ
+TXN-550194,sale,2026-10-01,2026-10-02,14500,217.5,14282.5,,LEK
+TXN-550201,refund,2026-10-01,2026-10-02,-2000,0,-2000,,LEK
+TXN-550207,chargeback,2026-10-01,2026-10-02,4000,0,4000,,WUS
+TXN-550210,sale,2026-10-01,2026-10-02,5600,84,5516,999999,LEK
