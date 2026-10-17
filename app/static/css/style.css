@@ -546,16 +546,12 @@ button:active { transform: translateY(1px); }
 .ticket {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 32px 26px 22px 30px;
+  border-radius: 14px;
+  padding: 26px 26px 22px 30px;
   margin-bottom: 20px;
   position: relative;
+  overflow: hidden;
   box-shadow: var(--shadow-md);
-  clip-path: polygon(
-    0% 8px, 6.25% 0px, 12.5% 8px, 18.75% 0px, 25% 8px, 31.25% 0px, 37.5% 8px, 43.75% 0px,
-    50% 8px, 56.25% 0px, 62.5% 8px, 68.75% 0px, 75% 8px, 81.25% 0px, 87.5% 8px, 93.75% 0px, 100% 8px,
-    100% 100%, 0% 100%
-  );
 }
 
 /* status stripe down the left edge */
@@ -761,7 +757,7 @@ button:active { transform: translateY(1px); }
 }
 
 @media (max-width: 520px) {
-  .ticket { padding: 30px 18px 18px 22px; }
+  .ticket { padding: 24px 18px 18px 22px; }
   .ticket-head { grid-template-columns: auto 1fr; gap: 12px; }
   .ticket-head .ticket-status { grid-column: 1 / -1; justify-self: start; }
   .ticket-stub { min-width: 50px; }
