@@ -233,12 +233,11 @@ button:active { transform: translateY(1px); }
 .theme-toggle:active { transform: scale(0.93); }
 
 .theme-toggle svg { width: 19px; height: 19px; position: absolute; transition: opacity 0.2s ease, transform 0.3s ease; }
-/* Icon shows the mode you'll switch TO: moon in light mode, sun in dark mode */
-.theme-toggle .icon-sun { opacity: 0; transform: rotate(40deg) scale(0.6); }
-.theme-toggle .icon-moon { opacity: 1; transform: rotate(0) scale(1); }
+.theme-toggle .icon-moon { opacity: 0; transform: rotate(-40deg) scale(0.6); }
+.theme-toggle .icon-sun { opacity: 1; transform: rotate(0) scale(1); }
 
-[data-theme="dark"] .theme-toggle .icon-moon { opacity: 0; transform: rotate(-40deg) scale(0.6); }
-[data-theme="dark"] .theme-toggle .icon-sun { opacity: 1; transform: rotate(0) scale(1); }
+[data-theme="dark"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(40deg) scale(0.6); }
+[data-theme="dark"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0) scale(1); }
 
 .role-switch {
   position: relative;
