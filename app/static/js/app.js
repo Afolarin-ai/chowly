@@ -339,12 +339,6 @@ function orderTicketHtml(order) {
     cancelled: "Cancelled",
   }[order.status];
 
-  const rows = order.items
-    .map(
-      (i) => `<div class="ticket-row"><span><span class="qty">${i.quantity}\u00d7</span>${i.menu_item.item_name}</span><span>${money(i.subtotal)}</span></div>`
-    )
-    .join("");
-
   const inactiveStatuses = ["placed", "assigned", "cancelled"];
   const canRate = !order.rating && !inactiveStatuses.includes(order.status);
   const canComplain = !order.complaint && !inactiveStatuses.includes(order.status);
@@ -370,34 +364,88 @@ function orderTicketHtml(order) {
     ? `<button class="btn-cancel" data-cancel-order="${order.id}">Cancel order</button>`
     : "";
 
-  const paymentNote = order.payment
-    ? `<div class="ticket-meta"><span>Paid \u2713 ref ${order.payment.transaction_reference}</span></div>`
-    : "";
-
   const statusPop = state.justSettledOrderIds.has(order.id) ? " just-settled" : "";
 
   return `
-    <div class="ticket">
-      <div class="ticket-head">
-        <div class="ticket-title">Table ${order.table_number} &middot; Order #${order.id}</div>
-        <div class="ticket-status status-${order.status}${statusPop}">${statusLabel}</div>
-      </div>
-      ${rows}
-      <div class="ticket-total"><span>Total</span><span>${money(order.total_amount)}</span></div>
-      <div class="ticket-meta">
-        <span>Waiting time: ~${order.estimated_waiting_time_minutes} min</span>
-        ${order.waiter ? `<span class="avatar-tag">${avatarHtml(order.waiter.first_name, order.waiter.last_name, "sm")} ${order.waiter.first_name} ${order.waiter.last_name}</span>` : ""}
-      </div>
-      ${paymentNote}
+    <div class="ticket ticket--${order.status}">
+      ${ticketHeadHtml(order, statusLabel, statusPop, itemCountLabel(order))}
+      ${ticketBodyHtml(order)}
+      ${ticketMetaHtml(order)}
       ${order.status !== "cancelled" ? `
       <div class="ticket-actions">
         ${payAction}
-        <button class="btn-print" data-print-order="${order.id}">Print ${order.payment ? "receipt" : "ticket"}</button>
+        ${printButtonHtml(order)}
         ${cancelAction}
       </div>` : ""}
       ${ratingSection}
       ${complaintSection}
     </div>`;
+}
+
+// ---------------------------------------------------------------------
+// Shared ticket pieces — used by both the customer and waiter cards
+// ---------------------------------------------------------------------
+const ICON_CLOCK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`;
+const ICON_PRINT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></svg>`;
+const ICON_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+
+function itemCountLabel(order) {
+  const count = order.items.reduce((sum, i) => sum + i.quantity, 0);
+  return `${count} item${count === 1 ? "" : "s"}`;
+}
+
+function ticketHeadHtml(order, statusLabel, statusPop, subline) {
+  return `
+    <div class="ticket-head">
+      <div class="ticket-stub">
+        <span class="ticket-stub-label">Table</span>
+        <span class="ticket-stub-num">${order.table_number}</span>
+      </div>
+      <div class="ticket-head-info">
+        <div class="ticket-title">Order <span class="ticket-hash">#${order.id}</span></div>
+        <div class="ticket-sub">${subline}</div>
+      </div>
+      <div class="ticket-status status-${order.status}${statusPop}">${statusLabel}</div>
+    </div>`;
+}
+
+function ticketBodyHtml(order) {
+  const rows = order.items
+    .map(
+      (i) => `
+      <div class="ticket-row">
+        <span class="qty">${i.quantity}×</span>
+        <span class="item-name">${escapeHtml(i.menu_item.item_name)}</span>
+        <span class="leader" aria-hidden="true"></span>
+        <span class="price">${money(i.subtotal)}</span>
+      </div>`
+    )
+    .join("");
+  return `
+    <div class="ticket-items">${rows}</div>
+    <div class="ticket-total">
+      <span class="ticket-total-label">Total</span>
+      <span class="ticket-total-amount">${money(order.total_amount)}</span>
+    </div>`;
+}
+
+function ticketMetaHtml(order) {
+  const waiter = order.waiter
+    ? `<span class="meta-chip">${avatarHtml(order.waiter.first_name, order.waiter.last_name, "sm")}<span><span class="meta-chip-label">Waiter</span> ${order.waiter.first_name} ${order.waiter.last_name}</span></span>`
+    : "";
+  const payment = order.payment
+    ? `<span class="meta-chip meta-chip--paid">${ICON_CHECK}<span>Ref ${escapeHtml(order.payment.transaction_reference)}</span></span>`
+    : "";
+  return `
+    <div class="ticket-meta">
+      <span class="meta-chip">${ICON_CLOCK}<span>~${order.estimated_waiting_time_minutes} min wait</span></span>
+      ${waiter}
+      ${payment}
+    </div>`;
+}
+
+function printButtonHtml(order) {
+  return `<button class="btn-print" data-print-order="${order.id}">${ICON_PRINT}Print ${order.payment ? "receipt" : "ticket"}</button>`;
 }
 
 // Cancellable while it's still just sitting in the queue: nobody's picked
@@ -708,12 +756,6 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders, onRail) {
     cancelled: "Cancelled by customer",
   }[order.status];
 
-  const rows = order.items
-    .map(
-      (i) => `<div class="ticket-row"><span><span class="qty">${i.quantity}\u00d7</span>${i.menu_item.item_name}</span><span>${money(i.subtotal)}</span></div>`
-    )
-    .join("");
-
   const complaintHtml = order.complaint
     ? `<div class="complaint-filed">Complaint: "${escapeHtml(order.complaint.description)}"</div>`
     : "";
@@ -740,23 +782,17 @@ function waiterOrderCardHtml(order, waiters, chefs, bartenders, onRail) {
   const statusPop = state.justSettledOrderIds.has(order.id) ? " just-settled" : "";
   const printHtml =
     order.status !== "cancelled"
-      ? `<div class="ticket-actions"><button class="btn-print" data-print-order="${order.id}">Print ${order.payment ? "receipt" : "ticket"}</button></div>`
+      ? `<div class="ticket-actions">${printButtonHtml(order)}</div>`
       : "";
 
+  const customerLine = `${escapeHtml(order.customer.first_name)} ${escapeHtml(order.customer.last_name)} &middot; ${itemCountLabel(order)}`;
+
   return `
-    <div class="ticket">
+    <div class="ticket ticket--${order.status}">
       ${onRail ? '<div class="spike-hole"></div>' : ""}
-      <div class="ticket-head">
-        <div class="ticket-title">Table ${order.table_number} &middot; Order #${order.id}</div>
-        <div class="ticket-status status-${order.status}${statusPop}">${statusLabel}</div>
-      </div>
-      <div class="ticket-meta"><span>${order.customer.first_name} ${order.customer.last_name}</span></div>
-      ${rows}
-      <div class="ticket-total"><span>Total</span><span>${money(order.total_amount)}</span></div>
-      <div class="ticket-meta">
-        <span>Waiting time: ~${order.estimated_waiting_time_minutes} min</span>
-        ${order.waiter ? `<span class="avatar-tag">${avatarHtml(order.waiter.first_name, order.waiter.last_name, "sm")} ${order.waiter.first_name} ${order.waiter.last_name}</span>` : ""}
-      </div>
+      ${ticketHeadHtml(order, statusLabel, statusPop, customerLine)}
+      ${ticketBodyHtml(order)}
+      ${ticketMetaHtml(order)}
       ${complaintHtml}
       ${ratingHtml}
       ${actionHtml}
